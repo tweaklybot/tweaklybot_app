@@ -76,7 +76,6 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
-    ksp(libs.hilt.compiler) // для обработки аннотаций HiltWorker
 
     // Firebase
     implementation(platform(libs.firebase.bom))
@@ -98,6 +97,10 @@ dependencies {
     // Images
     implementation(libs.coil.compose)
     implementation(libs.compressor)
+
+    // ML Kit
+    implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.face.detection)
 
     // WorkManager
     implementation(libs.work.runtime.ktx)
