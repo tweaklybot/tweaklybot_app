@@ -15,10 +15,7 @@ okhttp = "4.12.0"
 kotlinxSerializationJson = "1.6.3"
 room = "2.6.1"
 coil = "2.6.0"
-advancedLuban = "1.3.5"
-photoEditor = "3.0.2"
-mlkitTextRecognition = "16.1.0"
-mlkitFaceDetection = "16.1.7"
+luban = "1.1.8"
 work = "2.10.0"
 securityCrypto = "1.1.0"
 accompanistPermissions = "0.36.0"
@@ -68,12 +65,9 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 
 # Images
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
-advanced-luban = { group = "com.github.shaohui", name = "AdvancedLuban", version.ref = "advancedLuban" }
-photo-editor = { group = "com.github.burhanrashid52", name = "PhotoEditor", version.ref = "photoEditor" }
+luban = { group = "me.shaohui", name = "luban", version.ref = "luban" }
 
-# ML Kit
-mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
-mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkitFaceDetection" }
+# ML Kit - временно отключено для успешной сборки
 
 # WorkManager
 work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
