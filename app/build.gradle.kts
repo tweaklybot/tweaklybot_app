@@ -98,7 +98,7 @@ dependencies {
 
     // Images
     implementation(libs.coil.compose)
-    implementation(libs.luban)
+    implementation(libs.compressor)
 
     // WorkManager
     implementation(libs.work.runtime.ktx)
