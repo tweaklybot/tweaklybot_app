@@ -98,10 +98,6 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.compressor)
 
-    // ML Kit
-    implementation(libs.mlkit.text.recognition)
-    implementation(libs.mlkit.face.detection)
-
     // WorkManager
     implementation(libs.work.runtime.ktx)
 
