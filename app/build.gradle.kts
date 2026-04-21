@@ -75,6 +75,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.compiler) // для обработки аннотаций HiltWorker
 
     // Firebase
     implementation(platform(libs.firebase.bom))
