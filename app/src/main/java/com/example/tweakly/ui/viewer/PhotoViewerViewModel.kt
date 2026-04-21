@@ -3,19 +3,17 @@ package com.example.tweakly.ui.viewer
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tweakly.data.model.PhotoUiModel
 import com.example.tweakly.data.model.SyncStatusUi
 import com.example.tweakly.data.repository.PhotoRepository
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+// import com.google.mlkit.vision.common.InputImage
+// import com.google.mlkit.vision.text.TextRecognition
+// import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 data class ViewerUiState(
@@ -59,6 +57,19 @@ class PhotoViewerViewModel @Inject constructor(
     }
 
     fun performOcr(context: Context) {
+        // Временно отключено, пока не добавлены зависимости ML Kit
+        _uiState.update { it.copy(isOcrLoading = true) }
+        viewModelScope.launch {
+            // Заглушка
+            _uiState.update { 
+                it.copy(
+                    ocrResult = "Распознавание текста временно недоступно",
+                    isOcrLoading = false
+                ) 
+            }
+        }
+        /*
+        // Рабочий код с ML Kit (раскомментируйте после добавления зависимостей)
         val uri = _uiState.value.photo?.uri ?: return
         _uiState.update { it.copy(isOcrLoading = true) }
         viewModelScope.launch {
@@ -76,6 +87,7 @@ class PhotoViewerViewModel @Inject constructor(
                 _uiState.update { it.copy(error = e.message, isOcrLoading = false) }
             }
         }
+        */
     }
 
     fun sharePhoto(context: Context) {
