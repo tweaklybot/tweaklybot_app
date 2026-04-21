@@ -46,7 +46,8 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.10"
+        // Для Kotlin 2.0+ используем новый плагин Compose Compiler
+        kotlinCompilerExtensionVersion = "1.5.15"
     }
 
     packaging {
