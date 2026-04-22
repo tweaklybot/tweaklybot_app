@@ -2,14 +2,10 @@ package com.example.tweakly.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import com.example.tweakly.data.local.dao.PhotoDao
-import com.example.tweakly.data.local.entity.PhotoEntity
+import com.example.tweakly.data.local.dao.MediaDao
+import com.example.tweakly.data.local.entity.MediaEntity
 
-@Database(
-    entities = [PhotoEntity::class],
-    version = 1,
-    exportSchema = false
-)
+@Database(entities = [MediaEntity::class], version = 1, exportSchema = false)
 abstract class TweaklyDatabase : RoomDatabase() {
-    abstract fun photoDao(): PhotoDao
+    abstract fun mediaDao(): MediaDao
 }

@@ -19,51 +19,35 @@ class AuthRepository @Inject constructor(
 ) {
     val currentUser: Flow<UserInfo?> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { auth ->
-            trySend(auth.currentUser?.let {
-                UserInfo(it.uid, it.email, it.displayName, it.photoUrl?.toString())
-            })
+            trySend(auth.currentUser?.toUserInfo())
         }
         firebaseAuth.addAuthStateListener(listener)
         awaitClose { firebaseAuth.removeAuthStateListener(listener) }
     }
 
-    fun isLoggedIn(): Boolean = firebaseAuth.currentUser != null
+    fun isLoggedIn() = firebaseAuth.currentUser != null
+    fun currentUserInfo() = firebaseAuth.currentUser?.toUserInfo()
 
-    suspend fun signInWithGoogle(account: GoogleSignInAccount): Result<UserInfo> {
-        return try {
-            val credential = GoogleAuthProvider.getCredential(account.idToken, null)
-            val result = firebaseAuth.signInWithCredential(credential).await()
-            val user = result.user!!
-            refreshAndSaveToken()
-            Result.success(UserInfo(user.uid, user.email, user.displayName, user.photoUrl?.toString()))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun signInWithGoogle(account: GoogleSignInAccount): Result<UserInfo> = runCatching {
+        val cred = GoogleAuthProvider.getCredential(account.idToken, null)
+        val res = firebaseAuth.signInWithCredential(cred).await()
+        refreshToken()
+        res.user!!.toUserInfo()
     }
 
-    suspend fun signInWithEmail(email: String, password: String): Result<UserInfo> {
-        return try {
-            val result = firebaseAuth.signInWithEmailAndPassword(email, password).await()
-            val user = result.user!!
-            refreshAndSaveToken()
-            Result.success(UserInfo(user.uid, user.email, user.displayName, user.photoUrl?.toString()))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun signInWithEmail(email: String, password: String): Result<UserInfo> = runCatching {
+        val res = firebaseAuth.signInWithEmailAndPassword(email, password).await()
+        refreshToken()
+        res.user!!.toUserInfo()
     }
 
-    suspend fun registerWithEmail(email: String, password: String): Result<UserInfo> {
-        return try {
-            val result = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
-            val user = result.user!!
-            refreshAndSaveToken()
-            Result.success(UserInfo(user.uid, user.email, user.displayName, user.photoUrl?.toString()))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun registerWithEmail(email: String, password: String): Result<UserInfo> = runCatching {
+        val res = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
+        refreshToken()
+        res.user!!.toUserInfo()
     }
 
-    suspend fun refreshAndSaveToken() {
+    suspend fun refreshToken() {
         firebaseAuth.currentUser?.getIdToken(true)?.await()?.token?.let {
             tokenManager.saveToken(it)
         }
@@ -74,9 +58,6 @@ class AuthRepository @Inject constructor(
         tokenManager.clearToken()
     }
 
-    fun getCurrentUserInfo(): UserInfo? {
-        return firebaseAuth.currentUser?.let {
-            UserInfo(it.uid, it.email, it.displayName, it.photoUrl?.toString())
-        }
-    }
+    private fun com.google.firebase.auth.FirebaseUser.toUserInfo() =
+        UserInfo(uid, email, displayName, photoUrl?.toString())
 }

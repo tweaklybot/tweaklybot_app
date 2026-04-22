@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Tweakly</string>
+    <string name="permission_rationale">Tweakly нужен доступ к фото и видео для отображения галереи</string>
 </resources>

@@ -1,0 +1,20 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.jks
+*.keystore
+
+# App build outputs
+app/build/
+
+# Google services (replace with real file, don't commit secrets)
+# app/google-services.json  <- uncomment if you add real secrets
+
+# Kotlin
+*.class

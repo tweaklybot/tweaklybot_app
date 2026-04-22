@@ -1,0 +1,44 @@
+package com.example.tweakly.data.local.dao
+
+import androidx.room.*
+import com.example.tweakly.data.local.entity.DbMediaType
+import com.example.tweakly.data.local.entity.MediaEntity
+import com.example.tweakly.data.local.entity.SyncStatus
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface MediaDao {
+
+    @Query("SELECT * FROM media_items ORDER BY dateTaken DESC")
+    fun getAll(): Flow<List<MediaEntity>>
+
+    @Query("SELECT * FROM media_items WHERE mediaType = :type ORDER BY dateTaken DESC")
+    fun getByType(type: DbMediaType): Flow<List<MediaEntity>>
+
+    @Query("SELECT * FROM media_items WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): MediaEntity?
+
+    @Query("SELECT * FROM media_items WHERE syncStatus = :status")
+    suspend fun getByStatus(status: SyncStatus): List<MediaEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<MediaEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(item: MediaEntity)
+
+    @Query("""UPDATE media_items
+              SET syncStatus = :status, remotePath = :remotePath, lastUpdated = :time
+              WHERE id = :id""")
+    suspend fun updateSync(id: Long, status: SyncStatus, remotePath: String? = null,
+                           time: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM media_items WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE syncStatus = 'SYNCED'")
+    fun syncedCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE syncStatus = 'PENDING'")
+    fun pendingCount(): Flow<Int>
+}

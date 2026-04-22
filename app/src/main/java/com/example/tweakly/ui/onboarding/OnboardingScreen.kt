@@ -1,109 +1,136 @@
 package com.example.tweakly.ui.onboarding
 
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.*
+import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.*
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.tweakly.data.repository.SettingsRepository
 import kotlinx.coroutines.launch
 
-data class OnboardingPage(val icon: ImageVector, val title: String, val description: String)
+private data class Page(val icon: ImageVector, val color: Color, val title: String, val desc: String)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun OnboardingScreen(onFinish: () -> Unit) {
+fun OnboardingScreen(
+    onContinue: () -> Unit,
+    onSkip: () -> Unit,
+    settings: SettingsRepository = hiltViewModel<OnboardingViewModel>().settings
+) {
+    val scope = rememberCoroutineScope()
+    val pager = rememberPagerState { 4 }
+
     val pages = listOf(
-        OnboardingPage(Icons.Default.PhotoLibrary, "Умная Галерея", "Просматривайте все свои фото с удобной сеткой и группировкой по датам"),
-        OnboardingPage(Icons.Default.CloudUpload, "Облачная Синхронизация", "Автоматически сохраняйте фото в приватный репозиторий через GitHub"),
-        OnboardingPage(Icons.Default.Edit, "Мощный Редактор", "Обрезайте, добавляйте фильтры, текст и рисунки прямо в приложении"),
-        OnboardingPage(Icons.Default.Psychology, "ИИ-функции", "Распознавание текста на фото и группировка людей по лицам")
+        Page(Icons.Default.PhotoLibrary, Color(0xFF6C63AC),
+            "Умная Галерея", "Все ваши фото и видео в одном месте, сгруппированные по датам и категориям"),
+        Page(Icons.Default.CloudUpload, Color(0xFF4CAF93),
+            "Облачная Синхронизация", "Автоматическое резервное копирование в приватный GitHub-репозиторий"),
+        Page(Icons.Default.AutoFixHigh, Color(0xFFE07B39),
+            "Мощный Редактор", "Фильтры, обрезка, рисование, текст — полноценный редактор прямо в приложении"),
+        Page(Icons.Default.Psychology, Color(0xFFD44EAD),
+            "ИИ-функции", "Распознавание текста на фото, сканирование QR-кодов, группировка по лицам")
     )
 
-    val pagerState = rememberPagerState { pages.size }
-    val scope = rememberCoroutineScope()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.weight(1f)
-        ) { page ->
-            val p = pages[page]
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        HorizontalPager(pager, Modifier.fillMaxSize()) { idx ->
+            val page = pages[idx]
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
+                Modifier.fillMaxSize().padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Surface(
-                    modifier = Modifier.size(120.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer
+                // Icon bubble
+                Box(
+                    Modifier.size(140.dp).clip(CircleShape)
+                        .background(Brush.radialGradient(listOf(page.color.copy(.25f), page.color.copy(.05f)))),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(p.icon, contentDescription = null, modifier = Modifier.size(60.dp), tint = MaterialTheme.colorScheme.primary)
+                    Box(
+                        Modifier.size(100.dp).clip(CircleShape).background(page.color.copy(.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(page.icon, null, Modifier.size(52.dp), tint = page.color)
                     }
                 }
-                Spacer(Modifier.height(32.dp))
-                Text(p.title, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), textAlign = TextAlign.Center)
+                Spacer(Modifier.height(40.dp))
+                Text(page.title, style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(16.dp))
-                Text(p.description, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(page.desc, style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center, lineHeight = 24.sp)
             }
         }
 
-        // Dots indicator
-        Row(
-            modifier = Modifier.padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            repeat(pages.size) { idx ->
-                Box(
-                    modifier = Modifier
-                        .size(if (idx == pagerState.currentPage) 24.dp else 8.dp, 8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(
-                            if (idx == pagerState.currentPage) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
-                )
+        // Skip button top-right
+        TextButton(onClick = {
+            scope.launch {
+                settings.setSkipOnboarding(true)
+                onSkip()
             }
+        }, Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 16.dp)
+            .statusBarsPadding()) {
+            Text("Пропустить", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Bottom area
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .padding(horizontal = 28.dp, vertical = 40.dp).navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            TextButton(onClick = onFinish) { Text("Пропустить") }
+            // Dot indicators
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(4) { i ->
+                    val w by animateDpAsState(if (pager.currentPage == i) 28.dp else 8.dp, tween(200), label = "dot")
+                    Box(
+                        Modifier.height(8.dp).width(w).clip(CircleShape)
+                            .background(
+                                if (pager.currentPage == i) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface.copy(.2f)
+                            )
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(28.dp))
+
+            val isLast = pager.currentPage == 3
             Button(
                 onClick = {
-                    if (pagerState.currentPage < pages.size - 1) {
-                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                    } else {
-                        onFinish()
+                    scope.launch {
+                        if (isLast) {
+                            settings.setSkipOnboarding(true)
+                            onContinue()
+                        } else {
+                            pager.animateScrollToPage(pager.currentPage + 1)
+                        }
                     }
                 },
-                shape = RoundedCornerShape(12.dp)
+                Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = pages[pager.currentPage].color
+                )
             ) {
-                Text(if (pagerState.currentPage < pages.size - 1) "Далее" else "Начать", fontSize = 16.sp)
+                Text(if (isLast) "Начать" else "Далее",
+                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }

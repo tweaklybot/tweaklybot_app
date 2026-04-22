@@ -1,17 +1,20 @@
 package com.example.tweakly.ui.settings
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -19,180 +22,261 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    vm: SettingsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    var showLogoutDialog by remember { mutableStateOf(false) }
-    var showCreateRepoDialog by remember { mutableStateOf(false) }
-    var repoName by remember { mutableStateOf("tweakly-photos") }
+    val state by vm.state.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    var showLogout by remember { mutableStateOf(false) }
+    var showQuality by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
 
-    LaunchedEffect(Unit) { viewModel.loadRepoInfo() }
+    LaunchedEffect(state.message) {
+        state.message?.let { snackbar.showSnackbar(it); vm.clearMessage() }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text("Настройки") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-                }
+                    IconButton(onBack) { Icon(Icons.Default.ArrowBack, "Назад") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { padding ->
         Column(
-            modifier = Modifier
+            Modifier
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // User info section
-            SectionCard(title = "Аккаунт") {
-                uiState.userInfo?.let { user ->
+            // ── User card ────────────────────────────────────────────────────
+            state.user?.let { user ->
+                SettingsCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(12.dp))
+                        Box(Modifier.size(52.dp).clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center) {
+                            Text(
+                                (user.displayName?.firstOrNull() ?: user.email?.firstOrNull() ?: '?')
+                                    .uppercaseChar().toString(),
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.width(14.dp))
                         Column {
-                            Text(user.displayName ?: "Пользователь", fontWeight = FontWeight.SemiBold)
-                            Text(user.email ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(user.displayName ?: "Пользователь", fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.bodyLarge)
+                            user.email?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            } ?: run {
+                // Guest mode
+                SettingsCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Person, null, Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Гостевой режим", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            // ── Server status ─────────────────────────────────────────────────
+            SettingsCard(title = "Сервер") {
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val (icon, color, text) = when (state.serverOnline) {
+                            true  -> Triple(Icons.Default.CheckCircle, MaterialTheme.colorScheme.primary, "Онлайн")
+                            false -> Triple(Icons.Default.Error, MaterialTheme.colorScheme.error, "Недоступен")
+                            null  -> Triple(Icons.Default.Circle, MaterialTheme.colorScheme.onSurfaceVariant, "Проверяю...")
+                        }
+                        Icon(icon, null, Modifier.size(18.dp), tint = color)
+                        Spacer(Modifier.width(8.dp))
+                        Text(text)
+                    }
+                    TextButton({ vm.checkServer() }) { Text("Проверить") }
+                }
+            }
+
+            // ── Repo ──────────────────────────────────────────────────────────
+            if (state.user != null) {
+                SettingsCard(title = "Репозиторий GitHub") {
+                    if (state.repoExists && state.repoName != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Storage, null, Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            Text(state.repoName!!, style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium)
+                        }
+                        state.repoUrl?.let { url ->
+                            Spacer(Modifier.height(4.dp))
+                            TextButton({ uriHandler.openUri(url) }, contentPadding = PaddingValues(0.dp)) {
+                                Text("Открыть на GitHub", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    } else {
+                        Text("Репозиторий не создан", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = { vm.createRepo() },
+                            Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                            enabled = !state.isCreatingRepo
+                        ) {
+                            if (state.isCreatingRepo) {
+                                CircularProgressIndicator(Modifier.size(16.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                            } else {
+                                Icon(Icons.Default.Add, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text("Создать репозиторий")
                         }
                     }
                 }
             }
 
-            // Server status section
-            SectionCard(title = "Сервер") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            // ── Sync settings ─────────────────────────────────────────────────
+            SettingsCard(title = "Синхронизация") {
+                SwitchRow(
+                    icon = Icons.Default.Wifi,
+                    label = "Только по Wi-Fi",
+                    sub = "Не использовать мобильный интернет",
+                    checked = state.settings.wifiOnly,
+                    onChecked = { vm.setWifiOnly(it) }
+                )
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                SwitchRow(
+                    icon = Icons.Default.Sync,
+                    label = "Авто-синхронизация",
+                    sub = "Загружать новые файлы автоматически",
+                    checked = state.settings.autoSync,
+                    onChecked = { vm.setAutoSync(it) }
+                )
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                // Quality slider
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            if (uiState.isServerOnline) Icons.Default.CheckCircle else Icons.Default.Error,
-                            contentDescription = null,
-                            tint = if (uiState.isServerOnline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(uiState.serverStatus)
+                        Icon(Icons.Default.HighQuality, null, Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("Качество загрузки", style = MaterialTheme.typography.bodyMedium)
+                            Text("${state.settings.uploadQuality}% JPEG",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                    TextButton(onClick = { viewModel.checkServerHealth() }) { Text("Проверить") }
+                }
+                Slider(
+                    value = state.settings.uploadQuality.toFloat(),
+                    onValueChange = { vm.setUploadQuality(it.toInt()) },
+                    valueRange = 30f..100f, steps = 13,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // ── About ─────────────────────────────────────────────────────────
+            SettingsCard(title = "О приложении") {
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                    Text("Версия", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("2.0.0")
+                }
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                    Text("Бэкенд", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("tweaklybot-server.onrender.com", fontSize = 12.sp)
                 }
             }
 
-            // Repository section
-            SectionCard(title = "Репозиторий") {
-                if (uiState.repoInfo.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(8.dp))
-                        Text(uiState.repoInfo, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-                Button(
-                    onClick = { showCreateRepoDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !uiState.isLoading
-                ) {
-                    if (uiState.isLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                    else {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (uiState.repoInfo.isEmpty()) "Создать репозиторий" else "Изменить репозиторий")
-                    }
-                }
-            }
-
-            // Sync settings
-            SectionCard(title = "Синхронизация") {
-                SwitchRow(label = "Только по Wi-Fi", checked = uiState.wifiOnly, onCheckedChange = { viewModel.toggleWifiOnly(it) })
-                SwitchRow(label = "Автоматическая синхронизация", checked = uiState.autoSync, onCheckedChange = { viewModel.toggleAutoSync(it) })
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = { /* trigger sync */ },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Синхронизировать сейчас")
-                }
-            }
-
-            // Logout
             Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { showLogoutDialog = true },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                Spacer(Modifier.width(8.dp))
-                Text("Выйти из аккаунта", color = MaterialTheme.colorScheme.onErrorContainer)
+
+            // ── Logout button ─────────────────────────────────────────────────
+            if (state.user != null) {
+                Button(
+                    onClick = { showLogout = true },
+                    Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Icon(Icons.Default.Logout, null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Выйти из аккаунта",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.SemiBold)
+                }
             }
+
+            Spacer(Modifier.height(16.dp).navigationBarsPadding())
         }
     }
 
-    if (showLogoutDialog) {
+    if (showLogout) {
         AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
+            onDismissRequest = { showLogout = false },
+            icon = { Icon(Icons.Default.Logout, null) },
             title = { Text("Выйти?") },
-            text = { Text("Вы будете перенаправлены на экран входа. Локальные данные сохранятся.") },
+            text = { Text("Вы выйдете из аккаунта. Локальные данные сохранятся.") },
             confirmButton = {
-                TextButton(onClick = { viewModel.signOut(); onLogout() }) {
-                    Text("Выйти", color = MaterialTheme.colorScheme.error)
+                TextButton({ vm.signOut(); onLogout() }) {
+                    Text("Выйти", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                 }
             },
-            dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } }
-        )
-    }
-
-    if (showCreateRepoDialog) {
-        AlertDialog(
-            onDismissRequest = { showCreateRepoDialog = false },
-            title = { Text("Создать репозиторий") },
-            text = {
-                OutlinedTextField(
-                    value = repoName,
-                    onValueChange = { repoName = it },
-                    label = { Text("Название репозитория") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.createRepo(repoName); showCreateRepoDialog = false }) { Text("Создать") }
-            },
-            dismissButton = { TextButton(onClick = { showCreateRepoDialog = false }) { Text("Отмена") } }
+            dismissButton = { TextButton({ showLogout = false }) { Text("Отмена") } }
         )
     }
 }
 
+// ── Reusable components ────────────────────────────────────────────────────
+
 @Composable
-private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(12.dp))
+private fun SettingsCard(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(.5f))) {
+        Column(Modifier.padding(16.dp)) {
+            title?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(12.dp))
+            }
             content()
         }
     }
 }
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+private fun SwitchRow(
+    icon: ImageVector, label: String, sub: String? = null,
+    checked: Boolean, onChecked: (Boolean) -> Unit
+) {
+    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(label, style = MaterialTheme.typography.bodyMedium)
+                sub?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onChecked)
     }
 }

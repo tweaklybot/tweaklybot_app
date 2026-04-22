@@ -1,33 +1,20 @@
 {
   "project_info": {
-    "project_number": "YOUR_PROJECT_NUMBER",
-    "project_id": "YOUR_PROJECT_ID",
-    "storage_bucket": "YOUR_PROJECT_ID.appspot.com"
+    "project_number": "000000000000",
+    "project_id": "tweakly-placeholder",
+    "storage_bucket": "tweakly-placeholder.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:YOUR_PROJECT_NUMBER:android:YOUR_APP_HASH",
-        "android_client_info": {
-          "package_name": "com.example.tweakly"
-        }
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+        "android_client_info": { "package_name": "com.example.tweakly" }
       },
       "oauth_client": [
-        {
-          "client_id": "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
-          "client_type": 3
-        }
+        { "client_id": "000000000000-placeholder.apps.googleusercontent.com", "client_type": 3 }
       ],
-      "api_key": [
-        {
-          "current_key": "YOUR_API_KEY"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
+      "api_key": [ { "current_key": "AIzaSyPlaceholderForCI00000000000000000" } ],
+      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
     }
   ],
   "configuration_version": "1"

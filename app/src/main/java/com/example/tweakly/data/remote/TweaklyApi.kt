@@ -10,8 +10,11 @@ interface TweaklyApi {
     @GET("health")
     suspend fun healthCheck(): HealthResponse
 
+    @GET("api/user/me")
+    suspend fun getMe(): UserMeResponse
+
     @POST("api/repo/create")
-    suspend fun createRepo(@Body request: CreateRepoRequest): RepoResponse
+    suspend fun createRepo(@Body request: CreateRepoRequest = CreateRepoRequest()): RepoResponse
 
     @GET("api/repo/info")
     suspend fun getRepoInfo(): RepoInfoResponse

@@ -1,70 +1,121 @@
 package com.example.tweakly.ui.navigation
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
+import androidx.navigation.*
+import androidx.navigation.compose.*
+import com.example.tweakly.data.repository.AppSettings
+import com.example.tweakly.data.repository.SettingsRepository
 import com.example.tweakly.ui.auth.AuthScreen
-import com.example.tweakly.ui.auth.AuthViewModel
 import com.example.tweakly.ui.gallery.GalleryScreen
 import com.example.tweakly.ui.onboarding.OnboardingScreen
 import com.example.tweakly.ui.settings.SettingsScreen
-import com.example.tweakly.ui.viewer.PhotoViewerScreen
+import com.example.tweakly.ui.viewer.ViewerScreen
 
-sealed class Screen(val route: String) {
-    object Onboarding : Screen("onboarding")
-    object Auth : Screen("auth")
-    object Gallery : Screen("gallery")
-    object PhotoViewer : Screen("viewer/{photoId}") {
-        fun createRoute(photoId: Long) = "viewer/$photoId"
+sealed class Route(val path: String) {
+    object Onboarding : Route("onboarding")
+    object Auth       : Route("auth")
+    object Gallery    : Route("gallery")
+    object Settings   : Route("settings")
+    object Viewer     : Route("viewer/{mediaId}") {
+        fun go(id: Long) = "viewer/$id"
     }
-    object Settings : Screen("settings")
 }
 
+private val slideEnter  = slideInHorizontally(tween(300)) { it }
+private val slideExit   = slideOutHorizontally(tween(300)) { -it }
+private val slidePopEnter = slideInHorizontally(tween(300)) { -it }
+private val slidePopExit  = slideOutHorizontally(tween(300)) { it }
+private val fadeEnter   = fadeIn(tween(250))
+private val fadeExit    = fadeOut(tween(200))
+
 @Composable
-fun TweaklyNavGraph() {
+fun TweaklyNavGraph(settingsRepository: SettingsRepository = hiltViewModel<NavHelperViewModel>().settingsRepo) {
     val navController = rememberNavController()
-    val authViewModel: AuthViewModel = hiltViewModel()
-    val isLoggedIn by authViewModel.isLoggedIn.collectAsState(initial = false)
 
-    val startDest = if (isLoggedIn) Screen.Gallery.route else Screen.Auth.route
+    // Use null as sentinel so we wait for DataStore to emit the real value
+    val settings by settingsRepository.settings.collectAsState(initial = null)
 
-    NavHost(navController = navController, startDestination = startDest) {
-        composable(Screen.Onboarding.route) {
-            OnboardingScreen(onFinish = { navController.navigate(Screen.Auth.route) })
+    // Show a plain spinner until DataStore finishes its first read
+    if (settings == null) {
+        Box(
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
+        return
+    }
+
+    val s = settings!! // safe after null check
+    val start = when {
+        !s.skipOnboarding -> Route.Onboarding.path
+        s.isGuestMode     -> Route.Gallery.path
+        else              -> Route.Auth.path
+    }
+
+    NavHost(
+        navController = navController,
+        startDestination = start,
+        enterTransition  = { slideEnter + fadeEnter },
+        exitTransition   = { slideExit + fadeExit },
+        popEnterTransition  = { slidePopEnter + fadeEnter },
+        popExitTransition   = { slidePopExit + fadeExit }
+    ) {
+        composable(Route.Onboarding.path) {
+            OnboardingScreen(
+                onContinue = {
+                    navController.navigate(Route.Auth.path) {
+                        popUpTo(Route.Onboarding.path) { inclusive = true }
+                    }
+                },
+                onSkip = {
+                    navController.navigate(Route.Gallery.path) {
+                        popUpTo(Route.Onboarding.path) { inclusive = true }
+                    }
+                }
+            )
         }
-        composable(Screen.Auth.route) {
-            AuthScreen(onAuthSuccess = {
-                navController.navigate(Screen.Gallery.route) {
-                    popUpTo(Screen.Auth.route) { inclusive = true }
+
+        composable(Route.Auth.path) {
+            AuthScreen(onSuccess = {
+                navController.navigate(Route.Gallery.path) {
+                    popUpTo(Route.Auth.path) { inclusive = true }
+                }
+            }, onGuest = {
+                navController.navigate(Route.Gallery.path) {
+                    popUpTo(Route.Auth.path) { inclusive = true }
                 }
             })
         }
-        composable(Screen.Gallery.route) {
+
+        composable(Route.Gallery.path) {
             GalleryScreen(
-                onPhotoClick = { photoId ->
-                    navController.navigate(Screen.PhotoViewer.createRoute(photoId))
-                },
-                onSettingsClick = { navController.navigate(Screen.Settings.route) }
+                onMediaClick    = { id -> navController.navigate(Route.Viewer.go(id)) },
+                onSettingsClick = { navController.navigate(Route.Settings.path) }
             )
         }
+
         composable(
-            route = Screen.PhotoViewer.route,
-            arguments = listOf(navArgument("photoId") { type = NavType.LongType })
-        ) { backStackEntry ->
-            val photoId = backStackEntry.arguments?.getLong("photoId") ?: return@composable
-            PhotoViewerScreen(photoId = photoId, onBack = { navController.popBackStack() })
+            Route.Viewer.path,
+            arguments = listOf(navArgument("mediaId") { type = NavType.LongType })
+        ) { back ->
+            val id = back.arguments!!.getLong("mediaId")
+            ViewerScreen(mediaId = id, onBack = { navController.popBackStack() })
         }
-        composable(Screen.Settings.route) {
+
+        composable(Route.Settings.path) {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onLogout = {
-                    navController.navigate(Screen.Auth.route) {
+                    navController.navigate(Route.Auth.path) {
                         popUpTo(0) { inclusive = true }
                     }
                 }

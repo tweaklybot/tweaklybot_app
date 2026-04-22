@@ -3,190 +3,194 @@ package com.example.tweakly.ui.auth
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.*
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(
-    onAuthSuccess: () -> Unit,
-    viewModel: AuthViewModel = hiltViewModel()
+    onSuccess: () -> Unit,
+    onGuest: () -> Unit,
+    vm: AuthViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val state by vm.state.collectAsState()
     val context = LocalContext.current
-    val focusManager = LocalFocusManager.current
+    val focusMgr = LocalFocusManager.current
 
-    var isLoginMode by remember { mutableStateOf(true) }
+    var isLogin by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
+    var showPass by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) onAuthSuccess()
-    }
+    LaunchedEffect(state.success) { if (state.success) onSuccess() }
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
+    // Google Sign-In launcher
+    val googleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            task.result?.let { viewModel.signInWithGoogle(it) }
+            runCatching { task.result?.let { vm.signInWithGoogle(it) } }
         }
     }
 
-    fun launchGoogleSignIn() {
+    fun launchGoogle() {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("523036417504-8fuo4eq45fkpai9ntv7dd9vd7q7pvqde.apps.googleusercontent.com")
+            .requestIdToken("YOUR_WEB_CLIENT_ID_HERE") // замените на реальный
             .requestEmail()
             .build()
         val client = GoogleSignIn.getClient(context, gso)
-        client.signOut().addOnCompleteListener {
-            googleSignInLauncher.launch(client.signInIntent)
-        }
+        client.signOut().addOnCompleteListener { googleLauncher.launch(client.signInIntent) }
     }
 
     Box(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
     ) {
         Column(
-            modifier = Modifier
+            Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(horizontal = 28.dp)
+                .navigationBarsPadding()
+                .imePadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(60.dp))
+            Spacer(Modifier.height(72.dp))
 
-            // Logo / Title
-            Icon(
-                imageVector = Icons.Default.PhotoLibrary,
-                contentDescription = null,
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Tweakly",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 36.sp
-                ),
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Умная галерея с облачной синхронизацией",
+            // Logo
+            Box(
+                Modifier
+                    .size(90.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.PhotoLibrary, null,
+                    Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Text("Tweakly", style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+            Text("Умная галерея с облачной синхронизацией",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+                textAlign = TextAlign.Center)
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(36.dp))
 
-            // Mode toggle
-            TabRow(
-                selectedTabIndex = if (isLoginMode) 0 else 1,
-                modifier = Modifier.fillMaxWidth()
+            // Tab switch
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Tab(selected = isLoginMode, onClick = { isLoginMode = true }) {
-                    Text("Вход", modifier = Modifier.padding(vertical = 12.dp))
-                }
-                Tab(selected = !isLoginMode, onClick = { isLoginMode = false }) {
-                    Text("Регистрация", modifier = Modifier.padding(vertical = 12.dp))
+                Row(Modifier.fillMaxWidth().padding(4.dp)) {
+                    listOf("Вход" to true, "Регистрация" to false).forEach { (label, isLoginTab) ->
+                        val selected = isLogin == isLoginTab
+                        Surface(
+                            onClick = { isLogin = isLoginTab; vm.clearError() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            contentColor = if (selected) MaterialTheme.colorScheme.onPrimary
+                                           else MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Text(label, Modifier.padding(vertical = 10.dp),
+                                textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
 
             // Email field
             OutlinedTextField(
-                value = email,
-                onValueChange = { email = it; viewModel.clearError() },
+                value = email, onValueChange = { email = it; vm.clearError() },
                 label = { Text("Email") },
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.Email, null) },
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                ),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(14.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { focusMgr.moveFocus(FocusDirection.Down) }),
+                singleLine = true
             )
 
             Spacer(Modifier.height(12.dp))
 
             // Password field
             OutlinedTextField(
-                value = password,
-                onValueChange = { password = it; viewModel.clearError() },
+                value = password, onValueChange = { password = it; vm.clearError() },
                 label = { Text("Пароль") },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.Lock, null) },
                 trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = null
-                        )
+                    IconButton({ showPass = !showPass }) {
+                        Icon(if (showPass) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
                     }
                 },
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                visualTransformation = if (showPass) VisualTransformation.None else PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(14.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    focusMgr.clearFocus()
+                    if (isLogin) vm.signInEmail(email, password) else vm.registerEmail(email, password)
+                }),
+                singleLine = true
             )
 
-            // Error message
-            AnimatedVisibility(visible = uiState.error != null, enter = fadeIn(), exit = fadeOut()) {
-                uiState.error?.let { errorMsg ->
+            // Error
+            AnimatedVisibility(state.error != null) {
+                state.error?.let {
                     Spacer(Modifier.height(8.dp))
                     Card(
+                        Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text(
-                            text = errorMsg,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, null, Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onErrorContainer)
+                            Spacer(Modifier.width(8.dp))
+                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
                     }
                 }
             }
@@ -195,51 +199,51 @@ fun AuthScreen(
 
             // Primary button
             Button(
-                onClick = {
-                    if (isLoginMode) viewModel.signInWithEmail(email, password)
-                    else viewModel.registerWithEmail(email, password)
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                enabled = !uiState.isLoading,
-                shape = RoundedCornerShape(12.dp)
+                onClick = { if (isLogin) vm.signInEmail(email, password) else vm.registerEmail(email, password) },
+                Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                enabled = !state.isLoading
             ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text(if (isLoginMode) "Войти" else "Зарегистрироваться", fontSize = 16.sp)
+                AnimatedContent(state.isLoading, label = "btn") { loading ->
+                    if (loading) CircularProgressIndicator(Modifier.size(20.dp),
+                        color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.5.dp)
+                    else Text(if (isLogin) "Войти" else "Создать аккаунт", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f))
-                Text("  или  ", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                HorizontalDivider(modifier = Modifier.weight(1f))
+            // Divider
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                HorizontalDivider(Modifier.weight(1f))
+                Text("  или  ", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                HorizontalDivider(Modifier.weight(1f))
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // Google sign-in button
+            // Google button
             OutlinedButton(
-                onClick = { launchGoogleSignIn() },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                enabled = !uiState.isLoading,
-                shape = RoundedCornerShape(12.dp)
+                onClick = { launchGoogle() },
+                Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                enabled = !state.isLoading
             ) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Войти через Google", fontSize = 16.sp)
+                Icon(Icons.Default.AccountCircle, null, Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("Войти через Google", fontSize = 15.sp)
             }
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(12.dp))
+
+            // Guest button
+            TextButton(onClick = onGuest, Modifier.fillMaxWidth()) {
+                Text("Продолжить без аккаунта", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
