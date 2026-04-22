@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit
 fun GalleryScreen(
     onMediaClick: (Long) -> Unit,
     onSettingsClick: () -> Unit,
+    onSubscribeClick: () -> Unit = {},
     vm: GalleryViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsState()
@@ -43,7 +44,6 @@ fun GalleryScreen(
     val perms = rememberMultiplePermissionsState(permissions) { grants ->
         if (grants.values.all { it }) vm.loadMedia()
     }
-
     LaunchedEffect(Unit) {
         if (!perms.allPermissionsGranted) perms.launchMultiplePermissionRequest()
         else vm.loadMedia()
@@ -54,16 +54,27 @@ fun GalleryScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.PhotoLibrary, null,
-                            Modifier.size(26.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.PhotoLibrary, null, Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(8.dp))
                         Text("Tweakly", fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary)
                     }
                 },
                 actions = {
+                    // Premium badge if not logged in / free tier
+                    if (!state.isPremium) {
+                        TextButton(onClick = onSubscribeClick,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary)) {
+                            Icon(Icons.Default.Star, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Premium", style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold)
+                        }
+                    }
                     if (state.isLoggedIn) {
-                        IconButton(onClick = { /* sync */ }) {
+                        IconButton(onClick = { vm.syncAll() }) {
                             Icon(Icons.Default.Sync, "Синхронизировать")
                         }
                     }
@@ -72,8 +83,7 @@ fun GalleryScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                    containerColor = MaterialTheme.colorScheme.background)
             )
         }
     ) { padding ->
@@ -81,19 +91,20 @@ fun GalleryScreen(
             PermissionScreen(Modifier.padding(padding)) { perms.launchMultiplePermissionRequest() }
             return@Scaffold
         }
-
         Column(Modifier.padding(padding).fillMaxSize()) {
-            // Tabs
+            // Storage warning banner (free tier nearly full)
+            AnimatedVisibility(state.showStorageWarning) {
+                StorageWarningBanner(
+                    usedPercent = state.storagePercent,
+                    onUpgrade = onSubscribeClick
+                )
+            }
             GalleryTabs(state.tab, onTab = { vm.setTab(it) })
-
-            PullToRefreshBox(
-                isRefreshing = state.isRefreshing,
-                onRefresh = { vm.refresh() },
-                modifier = Modifier.fillMaxSize()
-            ) {
+            PullToRefreshBox(isRefreshing = state.isRefreshing,
+                onRefresh = { vm.refresh() }, Modifier.fillMaxSize()) {
                 when {
                     state.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        CircularProgressIndicator()
                     }
                     state.groupedMedia.isEmpty() -> EmptyState(state.tab)
                     else -> MediaGrid(state.groupedMedia, onMediaClick)
@@ -101,50 +112,61 @@ fun GalleryScreen(
             }
         }
     }
+}
 
-    // Error snackbar
-    state.error?.let { err ->
-        LaunchedEffect(err) { vm.clearError() }
+@Composable
+private fun StorageWarningBanner(usedPercent: Float, onUpgrade: () -> Unit) {
+    Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (usedPercent >= 1f) MaterialTheme.colorScheme.errorContainer
+                             else MaterialTheme.colorScheme.tertiaryContainer)) {
+        Row(Modifier.padding(10.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.Warning, null, Modifier.size(18.dp),
+                    tint = if (usedPercent >= 1f) MaterialTheme.colorScheme.onErrorContainer
+                           else MaterialTheme.colorScheme.onTertiaryContainer)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (usedPercent >= 1f) "Хранилище заполнено"
+                    else "Хранилище заполнено на ${(usedPercent * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            }
+            TextButton(onClick = onUpgrade, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Text("Upgrade", style = MaterialTheme.typography.labelSmall)
+            }
+        }
     }
 }
 
 @Composable
 private fun GalleryTabs(current: GalleryTab, onTab: (GalleryTab) -> Unit) {
-    val tabs = listOf(
-        GalleryTab.ALL to "Всё",
-        GalleryTab.PHOTOS to "Фото",
-        GalleryTab.VIDEOS to "Видео",
-        GalleryTab.SCREENSHOTS to "Скрины"
-    )
-    ScrollableTabRow(
-        selectedTabIndex = tabs.indexOfFirst { it.first == current },
-        containerColor = MaterialTheme.colorScheme.background,
-        edgePadding = 12.dp
-    ) {
+    val tabs = listOf(GalleryTab.ALL to "Всё", GalleryTab.PHOTOS to "Фото",
+        GalleryTab.VIDEOS to "Видео", GalleryTab.SCREENSHOTS to "Скрины")
+    ScrollableTabRow(selectedTabIndex = tabs.indexOfFirst { it.first == current },
+        containerColor = MaterialTheme.colorScheme.background, edgePadding = 12.dp) {
         tabs.forEach { (tab, label) ->
-            Tab(
-                selected = current == tab,
-                onClick = { onTab(tab) },
-                text = { Text(label, fontWeight = if (current == tab) FontWeight.SemiBold else FontWeight.Normal) }
-            )
+            Tab(selected = current == tab, onClick = { onTab(tab) },
+                text = { Text(label, fontWeight = if (current == tab) FontWeight.SemiBold
+                    else FontWeight.Normal) })
         }
     }
 }
 
 @Composable
 private fun MediaGrid(grouped: Map<String, List<MediaItem>>, onClick: (Long) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
         grouped.forEach { (date, items) ->
-            stickyHeader(key = "header_$date") {
+            stickyHeader(key = "h_$date") {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     Text(date, Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            item(key = "grid_$date") {
+            item(key = "g_$date") {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     Modifier.fillMaxWidth().heightIn(max = 5000.dp),
@@ -153,38 +175,22 @@ private fun MediaGrid(grouped: Map<String, List<MediaItem>>, onClick: (Long) -> 
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     userScrollEnabled = false
                 ) {
-                    items(items, key = { it.id }) { item ->
-                        MediaCell(item) { onClick(item.id) }
-                    }
+                    items(items, key = { it.id }) { item -> MediaCell(item) { onClick(item.id) } }
                 }
             }
-            item(key = "spacer_$date") { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
 
 @Composable
 private fun MediaCell(item: MediaItem, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(3.dp))
-            .clickable(onClick = onClick)
-    ) {
-        AsyncImage(
-            model = item.uri,
-            contentDescription = item.displayName,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Video duration badge
+    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(3.dp)).clickable(onClick = onClick)) {
+        AsyncImage(model = item.uri, contentDescription = item.displayName,
+            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         if (item.mediaType == MediaType.VIDEO) {
-            Box(
-                Modifier.align(Alignment.BottomStart).padding(4.dp)
-                    .background(Color.Black.copy(.65f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 5.dp, vertical = 2.dp)
-            ) {
+            Box(Modifier.align(Alignment.BottomStart).padding(4.dp)
+                .background(Color.Black.copy(.65f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 5.dp, vertical = 2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.PlayArrow, null, Modifier.size(10.dp), tint = Color.White)
                     Spacer(Modifier.width(2.dp))
@@ -192,15 +198,15 @@ private fun MediaCell(item: MediaItem, onClick: () -> Unit) {
                 }
             }
         }
-
-        // Sync badge
         if (item.syncStatus == SyncStatusUi.SYNCED) {
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(4.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(.85f), RoundedCornerShape(4.dp))
-                    .padding(3.dp)
-            ) {
+            Box(Modifier.align(Alignment.BottomEnd).padding(4.dp)
+                .background(Color(0xFF4CAF50).copy(.85f), RoundedCornerShape(4.dp)).padding(3.dp)) {
                 Icon(Icons.Default.CloudDone, null, Modifier.size(10.dp), tint = Color.White)
+            }
+        } else if (item.syncStatus == SyncStatusUi.FAILED) {
+            Box(Modifier.align(Alignment.BottomEnd).padding(4.dp)
+                .background(Color.Red.copy(.75f), RoundedCornerShape(4.dp)).padding(3.dp)) {
+                Icon(Icons.Default.Error, null, Modifier.size(10.dp), tint = Color.White)
             }
         }
     }
@@ -219,23 +225,19 @@ private fun PermissionScreen(modifier: Modifier, onRequest: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         Text("Нужен доступ к медиафайлам", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("Tweakly нужен доступ к фото и видео на вашем устройстве",
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Tweakly нужен доступ к фото и видео", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onRequest, shape = RoundedCornerShape(12.dp)) {
-            Text("Разрешить доступ")
-        }
+        Button(onClick = onRequest, shape = RoundedCornerShape(12.dp)) { Text("Разрешить доступ") }
     }
 }
 
 @Composable
 private fun EmptyState(tab: GalleryTab) {
-    Column(Modifier.fillMaxSize().padding(32.dp),
-        Alignment.CenterHorizontally, Arrangement.Center) {
+    Column(Modifier.fillMaxSize().padding(32.dp), Alignment.CenterHorizontally, Arrangement.Center) {
         val (icon, text) = when (tab) {
             GalleryTab.VIDEOS      -> Icons.Default.Videocam to "Видео не найдены"
             GalleryTab.SCREENSHOTS -> Icons.Default.CropFree to "Скриншоты не найдены"
-            else                   -> Icons.Default.PhotoLibrary to "Медиафайлы не найдены"
+            else -> Icons.Default.PhotoLibrary to "Медиафайлы не найдены"
         }
         Icon(icon, null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(.4f))
         Spacer(Modifier.height(12.dp))

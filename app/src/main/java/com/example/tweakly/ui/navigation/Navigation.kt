@@ -13,48 +13,37 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.*
 import androidx.navigation.compose.*
-import com.example.tweakly.data.repository.AppSettings
 import com.example.tweakly.data.repository.SettingsRepository
 import com.example.tweakly.ui.auth.AuthScreen
 import com.example.tweakly.ui.gallery.GalleryScreen
 import com.example.tweakly.ui.onboarding.OnboardingScreen
 import com.example.tweakly.ui.settings.SettingsScreen
+import com.example.tweakly.ui.subscription.SubscriptionScreen
 import com.example.tweakly.ui.viewer.ViewerScreen
 
 sealed class Route(val path: String) {
-    object Onboarding : Route("onboarding")
-    object Auth       : Route("auth")
-    object Gallery    : Route("gallery")
-    object Settings   : Route("settings")
-    object Viewer     : Route("viewer/{mediaId}") {
-        fun go(id: Long) = "viewer/$id"
-    }
+    object Onboarding   : Route("onboarding")
+    object Auth         : Route("auth")
+    object Gallery      : Route("gallery")
+    object Settings     : Route("settings")
+    object Subscription : Route("subscription")
+    object Viewer       : Route("viewer/{mediaId}") { fun go(id: Long) = "viewer/$id" }
 }
 
-private val slideEnter  = slideInHorizontally(tween(300)) { it }
-private val slideExit   = slideOutHorizontally(tween(300)) { -it }
-private val slidePopEnter = slideInHorizontally(tween(300)) { -it }
-private val slidePopExit  = slideOutHorizontally(tween(300)) { it }
-private val fadeEnter   = fadeIn(tween(250))
-private val fadeExit    = fadeOut(tween(200))
-
 @Composable
-fun TweaklyNavGraph(settingsRepository: SettingsRepository = hiltViewModel<NavHelperViewModel>().settingsRepo) {
+fun TweaklyNavGraph(
+    settingsRepository: SettingsRepository = hiltViewModel<NavHelperViewModel>().settingsRepo
+) {
     val navController = rememberNavController()
-
-    // Use null as sentinel so we wait for DataStore to emit the real value
     val settings by settingsRepository.settings.collectAsState(initial = null)
 
-    // Show a plain spinner until DataStore finishes its first read
     if (settings == null) {
-        Box(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center
-        ) { CircularProgressIndicator() }
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
 
-    val s = settings!! // safe after null check
+    val s = settings!!
     val start = when {
         !s.skipOnboarding -> Route.Onboarding.path
         s.isGuestMode     -> Route.Gallery.path
@@ -62,64 +51,45 @@ fun TweaklyNavGraph(settingsRepository: SettingsRepository = hiltViewModel<NavHe
     }
 
     NavHost(
-        navController = navController,
-        startDestination = start,
-        enterTransition  = { slideEnter + fadeEnter },
-        exitTransition   = { slideExit + fadeExit },
-        popEnterTransition  = { slidePopEnter + fadeEnter },
-        popExitTransition   = { slidePopExit + fadeExit }
+        navController = navController, startDestination = start,
+        enterTransition  = { slideInHorizontally(tween(300)) { it } + fadeIn(tween(250)) },
+        exitTransition   = { slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(200)) },
+        popEnterTransition  = { slideInHorizontally(tween(300)) { -it } + fadeIn(tween(250)) },
+        popExitTransition   = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200)) }
     ) {
         composable(Route.Onboarding.path) {
             OnboardingScreen(
-                onContinue = {
-                    navController.navigate(Route.Auth.path) {
-                        popUpTo(Route.Onboarding.path) { inclusive = true }
-                    }
-                },
-                onSkip = {
-                    navController.navigate(Route.Gallery.path) {
-                        popUpTo(Route.Onboarding.path) { inclusive = true }
-                    }
-                }
+                onContinue = { navController.navigate(Route.Auth.path) { popUpTo(Route.Onboarding.path) { inclusive = true } } },
+                onSkip     = { navController.navigate(Route.Gallery.path) { popUpTo(Route.Onboarding.path) { inclusive = true } } }
             )
         }
-
         composable(Route.Auth.path) {
-            AuthScreen(onSuccess = {
-                navController.navigate(Route.Gallery.path) {
-                    popUpTo(Route.Auth.path) { inclusive = true }
-                }
-            }, onGuest = {
-                navController.navigate(Route.Gallery.path) {
-                    popUpTo(Route.Auth.path) { inclusive = true }
-                }
-            })
+            AuthScreen(
+                onSuccess = { navController.navigate(Route.Gallery.path) { popUpTo(Route.Auth.path) { inclusive = true } } },
+                onGuest   = { navController.navigate(Route.Gallery.path) { popUpTo(Route.Auth.path) { inclusive = true } } }
+            )
         }
-
         composable(Route.Gallery.path) {
             GalleryScreen(
-                onMediaClick    = { id -> navController.navigate(Route.Viewer.go(id)) },
-                onSettingsClick = { navController.navigate(Route.Settings.path) }
+                onMediaClick     = { navController.navigate(Route.Viewer.go(it)) },
+                onSettingsClick  = { navController.navigate(Route.Settings.path) },
+                onSubscribeClick = { navController.navigate(Route.Subscription.path) }
             )
         }
-
-        composable(
-            Route.Viewer.path,
-            arguments = listOf(navArgument("mediaId") { type = NavType.LongType })
-        ) { back ->
-            val id = back.arguments!!.getLong("mediaId")
-            ViewerScreen(mediaId = id, onBack = { navController.popBackStack() })
+        composable(Route.Viewer.path,
+            arguments = listOf(navArgument("mediaId") { type = NavType.LongType })) { back ->
+            ViewerScreen(mediaId = back.arguments!!.getLong("mediaId"),
+                onBack = { navController.popBackStack() })
         }
-
         composable(Route.Settings.path) {
             SettingsScreen(
-                onBack = { navController.popBackStack() },
-                onLogout = {
-                    navController.navigate(Route.Auth.path) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
+                onBack           = { navController.popBackStack() },
+                onLogout         = { navController.navigate(Route.Auth.path) { popUpTo(0) { inclusive = true } } },
+                onSubscribeClick = { navController.navigate(Route.Subscription.path) }
             )
+        }
+        composable(Route.Subscription.path) {
+            SubscriptionScreen(onBack = { navController.popBackStack() })
         }
     }
 }

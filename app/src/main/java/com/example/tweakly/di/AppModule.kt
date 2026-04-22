@@ -2,6 +2,7 @@ package com.example.tweakly.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.work.WorkManager
 import com.example.tweakly.data.local.TweaklyDatabase
 import com.example.tweakly.data.local.dao.MediaDao
 import com.example.tweakly.data.remote.AuthInterceptor
@@ -31,12 +32,18 @@ object AppModule {
     fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
 
     @Provides @Singleton
-    fun provideJson(): Json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
+    fun provideJson(): Json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+    }
 
     @Provides @Singleton
     fun provideOkHttp(auth: AuthInterceptor): OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(auth)
-        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
+        .addInterceptor(HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BASIC
+        })
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
@@ -60,4 +67,8 @@ object AppModule {
 
     @Provides @Singleton
     fun provideMediaDao(db: TweaklyDatabase): MediaDao = db.mediaDao()
+
+    @Provides @Singleton
+    fun provideWorkManager(@ApplicationContext ctx: Context): WorkManager =
+        WorkManager.getInstance(ctx)
 }
