@@ -1,16 +1,23 @@
 package com.example.tweakly.ui.viewer
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tweakly.data.local.dao.MediaDao
 import com.example.tweakly.data.local.entity.SyncStatus
 import com.example.tweakly.data.model.MediaItem
 import com.example.tweakly.data.model.MediaType
 import com.example.tweakly.data.model.SyncStatusUi
 import com.example.tweakly.data.repository.MediaRepository
 import com.example.tweakly.data.repository.MediaRepository.Companion.toUi
+import com.example.tweakly.utils.ImageUtils
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -29,12 +36,14 @@ data class ViewerState(
     val isQrRunning: Boolean = false,
     val showDeleteDialog: Boolean = false,
     val showInfoDialog: Boolean = false,
+    val deleteSuccess: Boolean = false,
     val error: String? = null
 )
 
 @HiltViewModel
 class ViewerViewModel @Inject constructor(
-    private val mediaRepo: MediaRepository
+    private val mediaRepo: MediaRepository,
+    private val mediaDao: MediaDao
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ViewerState())
@@ -60,10 +69,8 @@ class ViewerViewModel @Inject constructor(
                     .process(image)
                     .addOnSuccessListener { result ->
                         _state.update {
-                            it.copy(
-                                ocrResult = result.text.ifBlank { "Текст не обнаружен" },
-                                isOcrRunning = false
-                            )
+                            it.copy(ocrResult = result.text.ifBlank { "Текст не обнаружен" },
+                                isOcrRunning = false)
                         }
                     }
                     .addOnFailureListener { e ->
@@ -75,7 +82,7 @@ class ViewerViewModel @Inject constructor(
         }
     }
 
-    // ── QR Scan ──────────────────────────────────────────────────────────────
+    // ── QR ───────────────────────────────────────────────────────────────────
     fun scanQr(context: Context) {
         val uri = _state.value.item?.uri ?: return
         _state.update { it.copy(isQrRunning = true) }
@@ -97,20 +104,56 @@ class ViewerViewModel @Inject constructor(
         }
     }
 
+    // ── Delete from device ────────────────────────────────────────────────────
+    fun deleteMedia(
+        context: Context,
+        launcher: ActivityResultLauncher<IntentSenderRequest>? = null
+    ) {
+        val item = _state.value.item ?: return
+        viewModelScope.launch {
+            val uri = Uri.parse(item.uri)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // API 30+: request deletion via system dialog
+                val pendingIntent = MediaStore.createDeleteRequest(
+                    context.contentResolver,
+                    listOf(uri)
+                )
+                launcher?.launch(IntentSenderRequest.Builder(pendingIntent).build())
+            } else {
+                // API 24-29: direct delete via ContentResolver
+                val deleted = ImageUtils.deleteMediaFile(context, uri)
+                if (deleted) {
+                    mediaDao.deleteById(item.id)
+                    _state.update { it.copy(deleteSuccess = true) }
+                } else {
+                    _state.update { it.copy(error = "Не удалось удалить файл") }
+                }
+            }
+        }
+    }
+
+    /** Called after API 30+ system delete dialog returns OK */
+    fun onDeleteConfirmed() {
+        val id = _state.value.item?.id ?: return
+        viewModelScope.launch {
+            mediaDao.deleteById(id)
+            _state.update { it.copy(deleteSuccess = true) }
+        }
+    }
+
     // ── Share ────────────────────────────────────────────────────────────────
     fun share(context: Context) {
         val item = _state.value.item ?: return
-        val mimeType = if (item.mediaType == MediaType.VIDEO) "video/*" else "image/*"
+        val mime = if (item.mediaType == MediaType.VIDEO) "video/*" else "image/*"
         context.startActivity(Intent.createChooser(
             Intent(Intent.ACTION_SEND).apply {
-                type = mimeType
+                type = mime
                 putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uri))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }, "Поделиться"
         ))
     }
 
-    // ── Dialog controls ──────────────────────────────────────────────────────
     fun showDeleteDialog()  = _state.update { it.copy(showDeleteDialog = true) }
     fun hideDeleteDialog()  = _state.update { it.copy(showDeleteDialog = false) }
     fun showInfoDialog()    = _state.update { it.copy(showInfoDialog = true) }

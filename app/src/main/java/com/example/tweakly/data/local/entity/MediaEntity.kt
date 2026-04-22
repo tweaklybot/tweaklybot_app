@@ -19,5 +19,7 @@ data class MediaEntity(
     val mediaType: DbMediaType = DbMediaType.PHOTO,
     val syncStatus: SyncStatus = SyncStatus.PENDING,
     val remotePath: String? = null,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val lastUpdated: Long = System.currentTimeMillis(),
+    val isFavorite: Boolean = false,
+    val faceGroupId: String? = null   // for People tab grouping
 )

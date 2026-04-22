@@ -16,8 +16,8 @@ android {
         applicationId = "com.example.tweakly"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 3
+        versionName = "2.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -26,9 +26,7 @@ android {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-        debug {
-            isDebuggable = true
-        }
+        debug { isDebuggable = true }
     }
 
     compileOptions {
@@ -36,7 +34,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
-
     kotlinOptions { jvmTarget = "17" }
 
     buildFeatures {
@@ -57,8 +54,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
-
-    // DataStore
+    implementation(libs.androidx.splashscreen)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.datastore.preferences)
 
     // Compose
@@ -98,15 +95,15 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // Images & video
+    // Images — Coil only (no broken compressor lib)
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
-    implementation(libs.compressor)
 
     // Media3 ExoPlayer
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.transformer)
+    implementation(libs.media3.effect)
     implementation(libs.media3.common)
 
     // ML Kit

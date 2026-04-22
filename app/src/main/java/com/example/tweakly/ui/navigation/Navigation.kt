@@ -15,8 +15,10 @@ import androidx.navigation.*
 import androidx.navigation.compose.*
 import com.example.tweakly.data.repository.SettingsRepository
 import com.example.tweakly.ui.auth.AuthScreen
+import com.example.tweakly.ui.editor.PhotoEditorScreen
 import com.example.tweakly.ui.gallery.GalleryScreen
 import com.example.tweakly.ui.onboarding.OnboardingScreen
+import com.example.tweakly.ui.search.SearchScreen
 import com.example.tweakly.ui.settings.SettingsScreen
 import com.example.tweakly.ui.subscription.SubscriptionScreen
 import com.example.tweakly.ui.viewer.ViewerScreen
@@ -27,7 +29,11 @@ sealed class Route(val path: String) {
     object Gallery      : Route("gallery")
     object Settings     : Route("settings")
     object Subscription : Route("subscription")
+    object Search       : Route("search")
     object Viewer       : Route("viewer/{mediaId}") { fun go(id: Long) = "viewer/$id" }
+    object Editor       : Route("editor/{mediaUri}/{mediaName}") {
+        fun go(uri: String, name: String) = "editor/${java.net.URLEncoder.encode(uri,"UTF-8")}/${java.net.URLEncoder.encode(name,"UTF-8")}"
+    }
 }
 
 @Composable
@@ -38,8 +44,9 @@ fun TweaklyNavGraph(
     val settings by settingsRepository.settings.collectAsState(initial = null)
 
     if (settings == null) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), Alignment.Center) {
+            CircularProgressIndicator()
+        }
         return
     }
 
@@ -50,8 +57,7 @@ fun TweaklyNavGraph(
         else              -> Route.Auth.path
     }
 
-    NavHost(
-        navController = navController, startDestination = start,
+    NavHost(navController = navController, startDestination = start,
         enterTransition  = { slideInHorizontally(tween(300)) { it } + fadeIn(tween(250)) },
         exitTransition   = { slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(200)) },
         popEnterTransition  = { slideInHorizontally(tween(300)) { -it } + fadeIn(tween(250)) },
@@ -73,13 +79,28 @@ fun TweaklyNavGraph(
             GalleryScreen(
                 onMediaClick     = { navController.navigate(Route.Viewer.go(it)) },
                 onSettingsClick  = { navController.navigate(Route.Settings.path) },
+                onSearchClick    = { navController.navigate(Route.Search.path) },
                 onSubscribeClick = { navController.navigate(Route.Subscription.path) }
             )
         }
         composable(Route.Viewer.path,
             arguments = listOf(navArgument("mediaId") { type = NavType.LongType })) { back ->
-            ViewerScreen(mediaId = back.arguments!!.getLong("mediaId"),
-                onBack = { navController.popBackStack() })
+            ViewerScreen(
+                mediaId = back.arguments!!.getLong("mediaId"),
+                onBack  = { navController.popBackStack() },
+                onEdit  = { uri, name -> navController.navigate(Route.Editor.go(uri, name)) }
+            )
+        }
+        composable(Route.Editor.path,
+            arguments = listOf(
+                navArgument("mediaUri")  { type = NavType.StringType },
+                navArgument("mediaName") { type = NavType.StringType }
+            )) { back ->
+            PhotoEditorScreen(
+                mediaUri  = java.net.URLDecoder.decode(back.arguments!!.getString("mediaUri")!!, "UTF-8"),
+                mediaName = java.net.URLDecoder.decode(back.arguments!!.getString("mediaName")!!, "UTF-8"),
+                onBack    = { navController.popBackStack() }
+            )
         }
         composable(Route.Settings.path) {
             SettingsScreen(
@@ -90,6 +111,12 @@ fun TweaklyNavGraph(
         }
         composable(Route.Subscription.path) {
             SubscriptionScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Route.Search.path) {
+            SearchScreen(
+                onBack       = { navController.popBackStack() },
+                onMediaClick = { navController.navigate(Route.Viewer.go(it)) }
+            )
         }
     }
 }
