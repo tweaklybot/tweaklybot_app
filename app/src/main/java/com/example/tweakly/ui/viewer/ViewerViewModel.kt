@@ -16,7 +16,7 @@ import com.example.tweakly.data.model.MediaItem
 import com.example.tweakly.data.model.MediaType
 import com.example.tweakly.data.model.SyncStatusUi
 import com.example.tweakly.data.repository.MediaRepository
-import com.example.tweakly.data.repository.MediaRepository.Companion.toUi
+import com.example.tweakly.data.repository.MediaRepository.Companion.mapToUi
 import com.example.tweakly.utils.ImageUtils
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
@@ -52,7 +52,7 @@ class ViewerViewModel @Inject constructor(
     fun load(id: Long) = viewModelScope.launch {
         val entity = mediaRepo.getById(id)
         if (entity != null) {
-            _state.update { it.copy(item = entity.toUi(), isLoading = false) }
+            _state.update { it.copy(item = entity.mapToUi(), isLoading = false) }
         } else {
             _state.update { it.copy(isLoading = false, error = "Файл не найден") }
         }

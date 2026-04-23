@@ -25,18 +25,18 @@ class MediaRepository @Inject constructor(
         SortOrder.DATE_ASC  -> dao.getAllAscDate()
         SortOrder.SIZE_DESC -> dao.getAllBySize()
         SortOrder.NAME_ASC  -> dao.getAllByName()
-    }.map { it.map(MediaEntity::toUi) }
+    }.map { list -> list.map { it.mapToUi() } }
 
     fun getByType(type: DbMediaType): Flow<List<MediaItem>> =
-        dao.getByType(type).map { it.map(MediaEntity::toUi) }
+        dao.getByType(type).map { list -> list.map { it.mapToUi() } }
 
     fun getFavorites(): Flow<List<MediaItem>> =
-        dao.getFavorites().map { it.map(MediaEntity::toUi) }
+        dao.getFavorites().map { list -> list.map { it.mapToUi() } }
 
     fun getFaceGroups(): Flow<List<String>> = dao.getFaceGroups()
 
     fun getByFaceGroup(groupId: String): Flow<List<MediaItem>> =
-        dao.getByFaceGroup(groupId).map { it.map(MediaEntity::toUi) }
+        dao.getByFaceGroup(groupId).map { list -> list.map { it.mapToUi() } }
 
     suspend fun getById(id: Long): MediaEntity? = dao.getById(id)
 
@@ -50,25 +50,27 @@ class MediaRepository @Inject constructor(
     suspend fun updateSync(id: Long, status: SyncStatus, remotePath: String? = null) =
         dao.updateSync(id, status, remotePath)
 
-    suspend fun toggleFavorite(id: Long, current: Boolean) =
-        dao.setFavorite(id, !current)
+    suspend fun toggleFavorite(id: Long, current: Boolean) = dao.setFavorite(id, !current)
 
-    suspend fun setFaceGroup(id: Long, groupId: String?) =
-        dao.setFaceGroup(id, groupId)
+    suspend fun setFaceGroup(id: Long, groupId: String?) = dao.setFaceGroup(id, groupId)
 
     suspend fun searchByName(query: String): List<MediaItem> =
-        dao.searchByName(query).map { it.toUi() }
+        dao.searchByName(query).map { it.mapToUi() }
 
     suspend fun deleteLocal(id: Long) = dao.deleteById(id)
 
     private fun queryImages(): List<MediaEntity> {
-        val proj = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME,
+        val proj = arrayOf(
+            MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.SIZE,
             MediaStore.Images.Media.WIDTH, MediaStore.Images.Media.HEIGHT,
-            MediaStore.Images.Media.DATA)
+            MediaStore.Images.Media.DATA
+        )
         val list = mutableListOf<MediaEntity>()
-        context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            proj, null, null, "${MediaStore.Images.Media.DATE_TAKEN} DESC")?.use { c ->
+        context.contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, proj, null, null,
+            "${MediaStore.Images.Media.DATE_TAKEN} DESC"
+        )?.use { c ->
             val idC = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
             val nmC = c.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
             val dtC = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
@@ -81,25 +83,31 @@ class MediaRepository @Inject constructor(
                 val fp = if (dpC >= 0) c.getString(dpC) ?: "" else ""
                 val isScreen = fp.contains("screenshot", ignoreCase = true) ||
                         fp.contains("Screenshots", ignoreCase = true)
-                list += MediaEntity(id = id, uri = "content://media/external/images/media/$id",
+                list += MediaEntity(
+                    id = id, uri = "content://media/external/images/media/$id",
                     displayName = c.getString(nmC) ?: "photo_$id.jpg",
                     dateTaken = c.getLong(dtC), size = c.getLong(szC),
                     width = c.getInt(wC), height = c.getInt(hC),
                     mediaType = if (isScreen) DbMediaType.SCREENSHOT else DbMediaType.PHOTO,
-                    syncStatus = SyncStatus.PENDING)
+                    syncStatus = SyncStatus.PENDING
+                )
             }
         }
         return list
     }
 
     private fun queryVideos(): List<MediaEntity> {
-        val proj = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME,
+        val proj = arrayOf(
+            MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME,
             MediaStore.Video.Media.DATE_TAKEN, MediaStore.Video.Media.SIZE,
             MediaStore.Video.Media.WIDTH, MediaStore.Video.Media.HEIGHT,
-            MediaStore.Video.Media.DURATION)
+            MediaStore.Video.Media.DURATION
+        )
         val list = mutableListOf<MediaEntity>()
-        context.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            proj, null, null, "${MediaStore.Video.Media.DATE_TAKEN} DESC")?.use { c ->
+        context.contentResolver.query(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI, proj, null, null,
+            "${MediaStore.Video.Media.DATE_TAKEN} DESC"
+        )?.use { c ->
             val idC  = c.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
             val nmC  = c.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
             val dtC  = c.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_TAKEN)
@@ -109,31 +117,33 @@ class MediaRepository @Inject constructor(
             val durC = c.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
             while (c.moveToNext()) {
                 val id = c.getLong(idC)
-                list += MediaEntity(id = id,
-                    uri = "content://media/external/video/media/$id",
+                list += MediaEntity(
+                    id = id, uri = "content://media/external/video/media/$id",
                     displayName = c.getString(nmC) ?: "video_$id.mp4",
                     dateTaken = c.getLong(dtC), size = c.getLong(szC),
                     width = c.getInt(wC), height = c.getInt(hC),
-                    duration = c.getLong(durC), mediaType = DbMediaType.VIDEO,
-                    syncStatus = SyncStatus.PENDING)
+                    duration = c.getLong(durC),
+                    mediaType = DbMediaType.VIDEO, syncStatus = SyncStatus.PENDING
+                )
             }
         }
         return list
     }
 
+    // Public helper so ViewerViewModel can call entity.mapToUi()
     companion object {
-        fun MediaEntity.toUi() = MediaItem(
+        fun MediaEntity.mapToUi(): MediaItem = MediaItem(
             id = id, uri = uri, displayName = displayName, dateTaken = dateTaken,
             size = size, width = width, height = height, duration = duration,
             mediaType = when (mediaType) {
-                DbMediaType.VIDEO -> MediaType.VIDEO
+                DbMediaType.VIDEO      -> MediaType.VIDEO
                 DbMediaType.SCREENSHOT -> MediaType.SCREENSHOT
-                else -> MediaType.PHOTO
+                else                   -> MediaType.PHOTO
             },
             syncStatus = when (syncStatus) {
                 SyncStatus.SYNCED -> SyncStatusUi.SYNCED
                 SyncStatus.FAILED -> SyncStatusUi.FAILED
-                else -> SyncStatusUi.PENDING
+                else              -> SyncStatusUi.PENDING
             },
             remotePath = remotePath, isFavorite = isFavorite, faceGroupId = faceGroupId
         )

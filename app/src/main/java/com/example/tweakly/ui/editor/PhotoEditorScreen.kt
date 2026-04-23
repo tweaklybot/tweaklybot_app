@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -98,8 +99,10 @@ fun PhotoEditorScreen(
                             drawPath(path, color = state.drawColor, style = Stroke(width = state.drawStroke))
                         }
                     }
-                } ?: if (state.isLoading) {
-                    CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+                } ?: run {
+                    if (state.isLoading) {
+                        CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+                    }
                 }
             }
 

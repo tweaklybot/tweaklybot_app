@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
@@ -28,7 +29,7 @@ import com.example.tweakly.data.model.*
 import com.google.accompanist.permissions.*
 import java.util.concurrent.TimeUnit
 
-@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun GalleryScreen(
     onMediaClick: (Long) -> Unit,
@@ -329,7 +330,7 @@ private fun StorageWarningBanner(usedPercent: Float, onUpgrade: () -> Unit) {
 
 @Composable
 private fun PermissionScreen(modifier: Modifier, onRequest: () -> Unit) {
-    Column(modifier.fillMaxSize().padding(32.dp), Alignment.CenterHorizontally, Arrangement.Center) {
+    Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Default.PhotoLibrary, null, Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
         Text("Доступ к медиафайлам", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -342,7 +343,7 @@ private fun PermissionScreen(modifier: Modifier, onRequest: () -> Unit) {
 
 @Composable
 private fun EmptyState(tab: GalleryTab) {
-    Column(Modifier.fillMaxSize().padding(32.dp), Alignment.CenterHorizontally, Arrangement.Center) {
+    Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         val (icon, text) = when (tab) {
             GalleryTab.VIDEOS      -> Icons.Default.Videocam to "Видео не найдены"
             GalleryTab.SCREENSHOTS -> Icons.Default.CropFree to "Скриншоты не найдены"
