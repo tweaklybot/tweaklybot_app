@@ -225,7 +225,7 @@ fun SettingsScreen(
             // ── About ──────────────────────────────────────────────────────
             SettingsCard(title = "О приложении") {
                 InfoRow("Версия", "2.0.0")
-                InfoRow("Сервер", "tweaklybot-server.onrender.com")
+                InfoRow("Сервер", "tweaklybot-server-1.onrender.com")
                 InfoRow("Хранилище", "GitHub (приватный репозиторий)")
             }
 

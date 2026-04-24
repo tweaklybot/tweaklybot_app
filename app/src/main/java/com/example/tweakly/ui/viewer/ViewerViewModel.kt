@@ -1,11 +1,9 @@
 package com.example.tweakly.ui.viewer
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.provider.MediaStore
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.lifecycle.ViewModel
@@ -18,17 +16,22 @@ import com.example.tweakly.data.model.SyncStatusUi
 import com.example.tweakly.data.repository.MediaRepository
 import com.example.tweakly.data.repository.MediaRepository.Companion.mapToUi
 import com.example.tweakly.utils.ImageUtils
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class ViewerState(
     val item: MediaItem? = null,
+    val allItems: List<MediaItem> = emptyList(),
     val isLoading: Boolean = true,
     val ocrResult: String? = null,
     val qrResult: String? = null,
@@ -49,90 +52,118 @@ class ViewerViewModel @Inject constructor(
     private val _state = MutableStateFlow(ViewerState())
     val state: StateFlow<ViewerState> = _state.asStateFlow()
 
-    fun load(id: Long) = viewModelScope.launch {
-        val entity = mediaRepo.getById(id)
-        if (entity != null) {
-            _state.update { it.copy(item = entity.mapToUi(), isLoading = false) }
-        } else {
-            _state.update { it.copy(isLoading = false, error = "Файл не найден") }
-        }
+    // Load current item + all siblings for pager swipe
+    fun loadAll(id: Long) = viewModelScope.launch {
+        _state.update { it.copy(isLoading = true) }
+        val allEntities = mediaDao.getAllList()
+        val allItems = allEntities.map { it.mapToUi() }
+        val current = allItems.firstOrNull { it.id == id }
+        _state.update { it.copy(item = current, allItems = allItems, isLoading = false) }
     }
 
-    // ── OCR ─────────────────────────────────────────────────────────────────
+    fun loadCurrent(id: Long) = viewModelScope.launch {
+        val entity = mediaRepo.getById(id)
+        entity?.let { _state.update { s -> s.copy(item = it.mapToUi()) } }
+    }
+
+    // ── OCR ──────────────────────────────────────────────────────────────────
     fun runOcr(context: Context) {
         val uri = _state.value.item?.uri ?: return
-        _state.update { it.copy(isOcrRunning = true) }
-        viewModelScope.launch {
+        if (_state.value.isOcrRunning) return
+        _state.update { it.copy(isOcrRunning = true, ocrResult = null) }
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val image = InputImage.fromFilePath(context, Uri.parse(uri))
-                TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                    .process(image)
-                    .addOnSuccessListener { result ->
-                        _state.update {
-                            it.copy(ocrResult = result.text.ifBlank { "Текст не обнаружен" },
-                                isOcrRunning = false)
+                val parsedUri = Uri.parse(uri)
+                // Try file-based first, fall back to bitmap
+                val image = try {
+                    InputImage.fromFilePath(context, parsedUri)
+                } catch (e: Exception) {
+                    val bmp = android.graphics.BitmapFactory.decodeStream(
+                        context.contentResolver.openInputStream(parsedUri))
+                    if (bmp != null) InputImage.fromBitmap(bmp, 0) else throw e
+                }
+
+                val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                withContext(Dispatchers.Main) {
+                    recognizer.process(image)
+                        .addOnSuccessListener { result ->
+                            val text = result.text.trim()
+                            _state.update {
+                                it.copy(ocrResult = text.ifEmpty { "Текст не обнаружен" }, isOcrRunning = false)
+                            }
                         }
-                    }
-                    .addOnFailureListener { e ->
-                        _state.update { it.copy(error = "OCR: ${e.message}", isOcrRunning = false) }
-                    }
+                        .addOnFailureListener { e ->
+                            _state.update { it.copy(error = "OCR: ${e.message}", isOcrRunning = false) }
+                        }
+                }
             } catch (e: Exception) {
-                _state.update { it.copy(error = "OCR: ${e.message}", isOcrRunning = false) }
+                _state.update { it.copy(error = "OCR ошибка: ${e.message}", isOcrRunning = false) }
             }
         }
     }
 
-    // ── QR ───────────────────────────────────────────────────────────────────
+    // ── QR ────────────────────────────────────────────────────────────────────
     fun scanQr(context: Context) {
         val uri = _state.value.item?.uri ?: return
-        _state.update { it.copy(isQrRunning = true) }
-        viewModelScope.launch {
+        if (_state.value.isQrRunning) return
+        _state.update { it.copy(isQrRunning = true, qrResult = null) }
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val image = InputImage.fromFilePath(context, Uri.parse(uri))
-                BarcodeScanning.getClient()
-                    .process(image)
-                    .addOnSuccessListener { barcodes ->
-                        val result = barcodes.firstOrNull()?.rawValue ?: "QR-код не найден"
-                        _state.update { it.copy(qrResult = result, isQrRunning = false) }
-                    }
-                    .addOnFailureListener { e ->
-                        _state.update { it.copy(error = "QR: ${e.message}", isQrRunning = false) }
-                    }
+                val parsedUri = Uri.parse(uri)
+                val image = try {
+                    InputImage.fromFilePath(context, parsedUri)
+                } catch (e: Exception) {
+                    val bmp = android.graphics.BitmapFactory.decodeStream(
+                        context.contentResolver.openInputStream(parsedUri))
+                    if (bmp != null) InputImage.fromBitmap(bmp, 0) else throw e
+                }
+
+                // Scan all barcode formats
+                val options = BarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+                    .build()
+                val scanner = BarcodeScanning.getClient(options)
+
+                withContext(Dispatchers.Main) {
+                    scanner.process(image)
+                        .addOnSuccessListener { barcodes ->
+                            val result = barcodes.firstOrNull()?.rawValue ?: "QR-код / штрих-код не найден"
+                            _state.update { it.copy(qrResult = result, isQrRunning = false) }
+                        }
+                        .addOnFailureListener { e ->
+                            _state.update { it.copy(error = "QR: ${e.message}", isQrRunning = false) }
+                        }
+                }
             } catch (e: Exception) {
-                _state.update { it.copy(error = "QR: ${e.message}", isQrRunning = false) }
+                _state.update { it.copy(error = "QR ошибка: ${e.message}", isQrRunning = false) }
             }
         }
     }
 
-    // ── Delete from device ────────────────────────────────────────────────────
-    fun deleteMedia(
-        context: Context,
-        launcher: ActivityResultLauncher<IntentSenderRequest>? = null
-    ) {
+    // ── Delete ────────────────────────────────────────────────────────────────
+    fun deleteMedia(context: Context, launcher: ActivityResultLauncher<IntentSenderRequest>? = null) {
         val item = _state.value.item ?: return
         viewModelScope.launch {
             val uri = Uri.parse(item.uri)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                // API 30+: request deletion via system dialog
-                val pendingIntent = MediaStore.createDeleteRequest(
-                    context.contentResolver,
-                    listOf(uri)
-                )
-                launcher?.launch(IntentSenderRequest.Builder(pendingIntent).build())
-            } else {
-                // API 24-29: direct delete via ContentResolver
-                val deleted = ImageUtils.deleteMediaFile(context, uri)
-                if (deleted) {
-                    mediaDao.deleteById(item.id)
-                    _state.update { it.copy(deleteSuccess = true) }
-                } else {
-                    _state.update { it.copy(error = "Не удалось удалить файл") }
+                try {
+                    val pi = android.provider.MediaStore.createDeleteRequest(
+                        context.contentResolver, listOf(uri))
+                    launcher?.launch(IntentSenderRequest.Builder(pi).build())
+                } catch (e: Exception) {
+                    // Fallback for some devices
+                    val deleted = ImageUtils.deleteMediaFile(context, uri)
+                    if (deleted) { mediaDao.deleteById(item.id); _state.update { it.copy(deleteSuccess = true) } }
+                    else _state.update { it.copy(error = "Не удалось удалить файл") }
                 }
+            } else {
+                val deleted = ImageUtils.deleteMediaFile(context, uri)
+                if (deleted) { mediaDao.deleteById(item.id); _state.update { it.copy(deleteSuccess = true) } }
+                else _state.update { it.copy(error = "Не удалось удалить файл") }
             }
         }
     }
 
-    /** Called after API 30+ system delete dialog returns OK */
     fun onDeleteConfirmed() {
         val id = _state.value.item?.id ?: return
         viewModelScope.launch {
@@ -141,7 +172,7 @@ class ViewerViewModel @Inject constructor(
         }
     }
 
-    // ── Share ────────────────────────────────────────────────────────────────
+    // ── Share ─────────────────────────────────────────────────────────────────
     fun share(context: Context) {
         val item = _state.value.item ?: return
         val mime = if (item.mediaType == MediaType.VIDEO) "video/*" else "image/*"
@@ -150,8 +181,7 @@ class ViewerViewModel @Inject constructor(
                 type = mime
                 putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uri))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }, "Поделиться"
-        ))
+            }, "Поделиться"))
     }
 
     fun showDeleteDialog()  = _state.update { it.copy(showDeleteDialog = true) }

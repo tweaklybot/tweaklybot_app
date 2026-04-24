@@ -11,22 +11,23 @@ object CoilConfig {
     fun buildLoader(context: Context): ImageLoader = ImageLoader.Builder(context)
         .memoryCache {
             MemoryCache.Builder(context)
-                .maxSizePercent(0.30) // 30% of RAM for image cache
+                .maxSizePercent(0.25) // 25% of available RAM
                 .build()
         }
         .diskCache {
             DiskCache.Builder()
                 .directory(context.cacheDir.resolve("image_cache"))
-                .maxSizeBytes(512L * 1024 * 1024) // 512 MB disk cache
+                .maxSizeBytes(300L * 1024 * 1024) // 300 MB
                 .build()
         }
         .memoryCachePolicy(CachePolicy.ENABLED)
         .diskCachePolicy(CachePolicy.ENABLED)
-        .networkCachePolicy(CachePolicy.ENABLED)
+        .networkCachePolicy(CachePolicy.DISABLED) // gallery is local, no network needed for images
         .crossfade(true)
         .components {
-            add(VideoFrameDecoder.Factory()) // Enable video thumbnails
+            add(VideoFrameDecoder.Factory()) // video thumbnails
         }
         .respectCacheHeaders(false)
+        .allowRgb565(true)   // 2x memory saving for thumbnails (no alpha needed in grid)
         .build()
 }

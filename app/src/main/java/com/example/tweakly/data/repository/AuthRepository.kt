@@ -47,6 +47,11 @@ class AuthRepository @Inject constructor(
         res.user!!.toUserInfo()
     }
 
+    /** Call once on startup to ensure token is fresh and saved */
+    suspend fun refreshTokenIfLoggedIn() {
+        if (isLoggedIn()) refreshToken()
+    }
+
     suspend fun refreshToken() {
         firebaseAuth.currentUser?.getIdToken(true)?.await()?.token?.let {
             tokenManager.saveToken(it)

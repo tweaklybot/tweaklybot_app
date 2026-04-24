@@ -1,9 +1,9 @@
 package com.example.tweakly.data.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 // ── Network ───────────────────────────────────────────────────────────────────
-
 @Serializable data class HealthResponse(val status: String, val version: String? = null, val timestamp: String? = null)
 @Serializable data class CreateRepoRequest(val repoName: String? = null)
 @Serializable data class RepoData(val name: String, val full_name: String? = null, val url: String, val private: Boolean = true, val size: Int = 0, val created_at: String? = null)
@@ -17,12 +17,12 @@ import kotlinx.serialization.Serializable
 @Serializable data class FilesResponse(val success: Boolean, val files: List<RemoteFile> = emptyList(), val count: Int = 0)
 @Serializable data class UserMeResponse(val uid: String, val email: String? = null, val name: String? = null, val repoName: String? = null, val repoExists: Boolean = false, val repoUrl: String? = null)
 
-// ── UI ────────────────────────────────────────────────────────────────────────
-
+// ── UI — @Immutable so Compose skips recomposition when data unchanged ────────
 enum class MediaType { PHOTO, VIDEO, SCREENSHOT }
 enum class SyncStatusUi { PENDING, SYNCED, FAILED, NOT_SYNCED }
 enum class SortOrder { DATE_DESC, DATE_ASC, SIZE_DESC, NAME_ASC }
 
+@Immutable
 data class MediaItem(
     val id: Long,
     val uri: String,
@@ -39,15 +39,7 @@ data class MediaItem(
     val faceGroupId: String? = null
 )
 
-data class FaceGroup(
-    val groupId: String,
-    val previewUri: String,
-    val count: Int
-)
+@Immutable
+data class FaceGroup(val groupId: String, val previewUri: String, val count: Int)
 
-data class UserInfo(
-    val uid: String,
-    val email: String?,
-    val displayName: String?,
-    val photoUrl: String?
-)
+data class UserInfo(val uid: String, val email: String?, val displayName: String?, val photoUrl: String?)

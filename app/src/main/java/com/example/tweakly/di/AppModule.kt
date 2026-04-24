@@ -26,7 +26,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    private const val BASE_URL = "https://tweaklybot-server.onrender.com/"
+    private const val BASE_URL = "https://tweaklybot-server-1.onrender.com/"
 
     @Provides @Singleton
     fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()

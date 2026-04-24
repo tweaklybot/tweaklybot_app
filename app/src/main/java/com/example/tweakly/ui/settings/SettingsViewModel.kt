@@ -2,6 +2,7 @@ package com.example.tweakly.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tweakly.data.model.CreateRepoRequest
 import com.example.tweakly.data.model.UserInfo
 import com.example.tweakly.data.remote.TweaklyApi
 import com.example.tweakly.data.repository.AppSettings
@@ -37,6 +38,7 @@ class SettingsViewModel @Inject constructor(
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
 
     init {
+        // All settings changes auto-persist via DataStore — just observe
         settingsRepo.settings
             .onEach { s -> _state.update { it.copy(settings = s) } }
             .launchIn(viewModelScope)
@@ -53,24 +55,23 @@ class SettingsViewModel @Inject constructor(
         loadRepoInfo()
     }
 
+    // ── Settings — each call writes to DataStore immediately ─────────────────
     fun setWifiOnly(v: Boolean)   = viewModelScope.launch { settingsRepo.setWifiOnly(v) }
     fun setAutoSync(v: Boolean)   = viewModelScope.launch { settingsRepo.setAutoSync(v) }
     fun setUploadQuality(v: Int)  = viewModelScope.launch { settingsRepo.setUploadQuality(v) }
 
+    // ── Server health ─────────────────────────────────────────────────────────
     fun checkServer() = viewModelScope.launch {
         _state.update { it.copy(serverOnline = null) }
         val ok = try { api.healthCheck().status == "ok" } catch (_: Exception) { false }
         _state.update { it.copy(serverOnline = ok) }
     }
 
+    // ── Repository ────────────────────────────────────────────────────────────
     fun loadRepoInfo() = viewModelScope.launch {
         try {
             val r = api.getRepoInfo()
-            _state.update { it.copy(
-                repoExists = r.exists,
-                repoName   = r.repo?.name ?: r.repoName,
-                repoUrl    = r.repo?.url
-            )}
+            _state.update { it.copy(repoExists = r.exists, repoName = r.repo?.name ?: r.repoName, repoUrl = r.repo?.url) }
         } catch (_: Exception) {}
     }
 
@@ -78,21 +79,16 @@ class SettingsViewModel @Inject constructor(
         _state.update { it.copy(isCreatingRepo = true) }
         try {
             authRepo.refreshToken()
-            val r = api.createRepo(
-                com.example.tweakly.data.model.CreateRepoRequest(name.takeIf { it.isNotBlank() })
-            )
+            val req = CreateRepoRequest(name.takeIf { it.isNotBlank() })
+            val r = api.createRepo(req)
             if (r.success) {
-                _state.update { it.copy(
-                    repoExists = true,
-                    repoName   = r.repo?.name,
-                    repoUrl    = r.repo?.url,
-                    message    = if (r.created) "Репозиторий создан!" else "Репозиторий уже существует"
-                )}
+                _state.update { it.copy(repoExists = true, repoName = r.repo?.name, repoUrl = r.repo?.url,
+                    message = if (r.created) "✅ Репозиторий создан!" else "Репозиторий уже существует") }
             } else {
                 _state.update { it.copy(message = r.message ?: "Ошибка создания репозитория") }
             }
         } catch (e: Exception) {
-            _state.update { it.copy(message = "Ошибка: ${e.message?.take(80)}") }
+            _state.update { it.copy(message = "Ошибка: ${e.message?.take(100)}") }
         } finally {
             _state.update { it.copy(isCreatingRepo = false) }
         }
@@ -102,6 +98,9 @@ class SettingsViewModel @Inject constructor(
 
     fun signOut() {
         authRepo.signOut()
-        viewModelScope.launch { settingsRepo.setGuestMode(false) }
+        viewModelScope.launch {
+            settingsRepo.setGuestMode(false)
+            settingsRepo.setSkipOnboarding(false) // show auth next launch
+        }
     }
 }

@@ -21,6 +21,7 @@ sealed class GalleryListItem {
     data class PeopleGroupCell(val group: FaceGroup) : GalleryListItem()
 }
 
+@androidx.compose.runtime.Stable
 data class GalleryUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,

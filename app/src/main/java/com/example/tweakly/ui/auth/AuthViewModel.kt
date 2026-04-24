@@ -25,31 +25,18 @@ class AuthViewModel @Inject constructor(
     private val _state = MutableStateFlow(AuthState())
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
-    // Expose login state for auto-login
-    val isLoggedIn: StateFlow<Boolean> = authRepo.currentUser
-        .map { it != null }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authRepo.isLoggedIn())
-
-    fun signInWithGoogle(account: GoogleSignInAccount) = launch {
+    fun signInWithGoogle(account: GoogleSignInAccount) = doAuth {
         authRepo.signInWithGoogle(account)
-            .onSuccess { _state.value = AuthState(success = true) }
-            .onFailure { _state.value = AuthState(error = friendlyError(it.message)) }
     }
 
     fun signInEmail(email: String, password: String) {
         if (!validate(email, password)) return
-        launch { authRepo.signInWithEmail(email, password)
-            .onSuccess { _state.value = AuthState(success = true) }
-            .onFailure { _state.value = AuthState(error = friendlyError(it.message)) }
-        }
+        doAuth { authRepo.signInWithEmail(email, password) }
     }
 
     fun registerEmail(email: String, password: String) {
         if (!validate(email, password)) return
-        launch { authRepo.registerWithEmail(email, password)
-            .onSuccess { _state.value = AuthState(success = true) }
-            .onFailure { _state.value = AuthState(error = friendlyError(it.message)) }
-        }
+        doAuth { authRepo.registerWithEmail(email, password) }
     }
 
     fun continueAsGuest() = viewModelScope.launch {
@@ -58,7 +45,21 @@ class AuthViewModel @Inject constructor(
         _state.value = AuthState(success = true)
     }
 
+    fun setError(msg: String) { _state.update { it.copy(error = msg) } }
     fun clearError() { _state.update { it.copy(error = null) } }
+
+    private fun doAuth(block: suspend () -> Result<*>) {
+        viewModelScope.launch {
+            _state.value = AuthState(isLoading = true)
+            block()
+                .onSuccess {
+                    // Mark onboarding done so next launch goes straight to gallery
+                    settingsRepo.setSkipOnboarding(true)
+                    _state.value = AuthState(success = true)
+                }
+                .onFailure { _state.value = AuthState(error = friendlyError(it.message)) }
+        }
+    }
 
     private fun validate(email: String, password: String): Boolean {
         val err = when {
@@ -74,18 +75,14 @@ class AuthViewModel @Inject constructor(
     private fun friendlyError(msg: String?) = when {
         msg == null -> "Неизвестная ошибка"
         "INVALID_EMAIL" in msg || "badly formatted" in msg -> "Неверный формат email"
-        "WRONG_PASSWORD" in msg || "invalid credential" in msg -> "Неверный email или пароль"
-        "EMAIL_EXISTS" in msg -> "Этот email уже зарегистрирован"
-        "WEAK_PASSWORD" in msg -> "Пароль слишком простой"
-        "network" in msg.lowercase() -> "Нет соединения с сетью"
-        "SIGN_IN_CANCELLED" in msg -> null  // user cancelled
-        else -> msg.take(100)
-    }
-
-    private fun launch(block: suspend () -> Unit) {
-        viewModelScope.launch {
-            _state.value = AuthState(isLoading = true)
-            block()
-        }
+        "WRONG_PASSWORD" in msg || "invalid credential" in msg || "INVALID_LOGIN_CREDENTIALS" in msg ->
+            "Неверный email или пароль"
+        "EMAIL_EXISTS" in msg || "email-already-in-use" in msg -> "Этот email уже зарегистрирован"
+        "WEAK_PASSWORD" in msg -> "Пароль слишком простой (минимум 6 символов)"
+        "USER_NOT_FOUND" in msg -> "Аккаунт не найден. Зарегистрируйтесь"
+        "network" in msg.lowercase() || "Unable to resolve" in msg -> "Нет соединения с сетью"
+        "SIGN_IN_CANCELLED" in msg || "12501" in msg -> null
+        "10:" in msg -> "Google Sign-In: добавьте SHA-1 в Firebase Console"
+        else -> msg.take(120)
     }
 }

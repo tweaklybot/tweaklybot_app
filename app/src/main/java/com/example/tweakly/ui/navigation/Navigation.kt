@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.*
 import androidx.navigation.compose.*
-import com.example.tweakly.data.repository.SettingsRepository
+import com.example.tweakly.data.repository.AppSettings
 import com.example.tweakly.ui.auth.AuthScreen
 import com.example.tweakly.ui.editor.PhotoEditorScreen
 import com.example.tweakly.ui.gallery.GalleryScreen
@@ -32,37 +32,49 @@ sealed class Route(val path: String) {
     object Search       : Route("search")
     object Viewer       : Route("viewer/{mediaId}") { fun go(id: Long) = "viewer/$id" }
     object Editor       : Route("editor/{mediaUri}/{mediaName}") {
-        fun go(uri: String, name: String) = "editor/${java.net.URLEncoder.encode(uri,"UTF-8")}/${java.net.URLEncoder.encode(name,"UTF-8")}"
+        fun go(uri: String, name: String) =
+            "editor/${java.net.URLEncoder.encode(uri, "UTF-8")}/${java.net.URLEncoder.encode(name, "UTF-8")}"
     }
 }
 
 @Composable
-fun TweaklyNavGraph(
-    settingsRepository: SettingsRepository = hiltViewModel<NavHelperViewModel>().settingsRepo
-) {
+fun TweaklyNavGraph(vm: NavHelperViewModel = hiltViewModel()) {
     val navController = rememberNavController()
-    val settings by settingsRepository.settings.collectAsState(initial = null)
 
+    // Both DataStore settings AND Firebase auth state, null = still loading
+    val settings by vm.settingsRepo.settings.collectAsState(initial = null)
+
+    // Show spinner until DataStore emits first value
     if (settings == null) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), Alignment.Center) {
-            CircularProgressIndicator()
-        }
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            Alignment.Center) { CircularProgressIndicator() }
         return
     }
 
     val s = settings!!
+    val isFirebaseLoggedIn = vm.authRepo.isLoggedIn()
+
+    // Determine start destination:
+    // 1. If onboarding not seen → show onboarding
+    // 2. If Firebase says already logged in → skip auth, go to gallery
+    // 3. If guest mode was chosen → gallery
+    // 4. Otherwise → auth screen
     val start = when {
-        !s.skipOnboarding -> Route.Onboarding.path
-        s.isGuestMode     -> Route.Gallery.path
-        else              -> Route.Auth.path
+        !s.skipOnboarding  -> Route.Onboarding.path
+        isFirebaseLoggedIn -> Route.Gallery.path  // ← auto-login fix
+        s.isGuestMode      -> Route.Gallery.path
+        else               -> Route.Auth.path
     }
 
+    val enter  = slideInHorizontally(tween(280)) { it } + fadeIn(tween(220))
+    val exit   = slideOutHorizontally(tween(280)) { -it } + fadeOut(tween(180))
+    val pEnter = slideInHorizontally(tween(280)) { -it } + fadeIn(tween(220))
+    val pExit  = slideOutHorizontally(tween(280)) { it } + fadeOut(tween(180))
+
     NavHost(navController = navController, startDestination = start,
-        enterTransition  = { slideInHorizontally(tween(300)) { it } + fadeIn(tween(250)) },
-        exitTransition   = { slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(200)) },
-        popEnterTransition  = { slideInHorizontally(tween(300)) { -it } + fadeIn(tween(250)) },
-        popExitTransition   = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200)) }
-    ) {
+        enterTransition = { enter }, exitTransition = { exit },
+        popEnterTransition = { pEnter }, popExitTransition = { pExit }) {
+
         composable(Route.Onboarding.path) {
             OnboardingScreen(
                 onContinue = { navController.navigate(Route.Auth.path) { popUpTo(Route.Onboarding.path) { inclusive = true } } },
@@ -94,8 +106,7 @@ fun TweaklyNavGraph(
         composable(Route.Editor.path,
             arguments = listOf(
                 navArgument("mediaUri")  { type = NavType.StringType },
-                navArgument("mediaName") { type = NavType.StringType }
-            )) { back ->
+                navArgument("mediaName") { type = NavType.StringType })) { back ->
             PhotoEditorScreen(
                 mediaUri  = java.net.URLDecoder.decode(back.arguments!!.getString("mediaUri")!!, "UTF-8"),
                 mediaName = java.net.URLDecoder.decode(back.arguments!!.getString("mediaName")!!, "UTF-8"),
