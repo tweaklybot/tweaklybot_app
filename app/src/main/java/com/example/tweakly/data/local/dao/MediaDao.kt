@@ -61,9 +61,10 @@ interface MediaDao {
     @Query("DELETE FROM media_items WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("SELECT COUNT(*) FROM media_items WHERE syncStatus = 'SYNCED'")
-    suspend fun getAllList(): List<MediaEntity>
+    @Query("SELECT * FROM media_items WHERE syncStatus = 'SYNCED'")
+    suspend fun getAllSynced(): List<MediaEntity>
 
+    @Query("SELECT COUNT(*) FROM media_items WHERE syncStatus = 'SYNCED'")
     fun syncedCount(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM media_items WHERE syncStatus = 'PENDING'")

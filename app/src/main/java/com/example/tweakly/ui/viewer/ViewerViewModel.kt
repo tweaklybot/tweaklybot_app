@@ -55,7 +55,7 @@ class ViewerViewModel @Inject constructor(
     // Load current item + all siblings for pager swipe
     fun loadAll(id: Long) = viewModelScope.launch {
         _state.update { it.copy(isLoading = true) }
-        val allEntities = mediaDao.getAllList()
+        val allEntities = mediaDao.getAllSynced()
         val allItems = allEntities.map { it.mapToUi() }
         val current = allItems.firstOrNull { it.id == id }
         _state.update { it.copy(item = current, allItems = allItems, isLoading = false) }
