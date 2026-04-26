@@ -204,7 +204,6 @@ private fun MediaGrid(
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MediaCell(
     media: MediaItem,
