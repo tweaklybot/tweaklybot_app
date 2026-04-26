@@ -33,6 +33,7 @@ import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.tweakly.data.model.MediaItem
 import com.example.tweakly.data.model.MediaType
 import com.example.tweakly.data.model.SyncStatusUi
@@ -251,12 +252,29 @@ fun ViewerScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ZoomablePhoto(uri: String, onTap: () -> Unit) {
+    val ctx = LocalContext.current
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
-    AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Fit,
+
+    // Build a proper ImageRequest so Coil can resolve content:// URIs from MediaStore
+    val request = remember(uri) {
+        ImageRequest.Builder(ctx)
+            .data(uri)
+            .crossfade(true)
+            // Full resolution for viewer — no size restriction
+            .memoryCacheKey(uri)
+            .diskCacheKey(uri)
+            .build()
+    }
+
+    AsyncImage(
+        model = request,
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
         modifier = Modifier.fillMaxSize()
-            .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY)
+            .graphicsLayer(scaleX = scale, scaleY = scale,
+                translationX = offsetX, translationY = offsetY)
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     scale = (scale * zoom).coerceIn(.5f, 6f)
@@ -264,10 +282,15 @@ private fun ZoomablePhoto(uri: String, onTap: () -> Unit) {
                 }
             }
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { onTap() }, onDoubleTap = {
-                    if (scale > 1.5f) { scale = 1f; offsetX = 0f; offsetY = 0f } else scale = 2.5f
-                })
-            })
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onDoubleTap = {
+                        if (scale > 1.5f) { scale = 1f; offsetX = 0f; offsetY = 0f }
+                        else scale = 2.5f
+                    }
+                )
+            }
+    )
 }
 
 @Composable

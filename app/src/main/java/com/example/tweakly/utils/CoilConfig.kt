@@ -22,8 +22,7 @@ object CoilConfig {
         }
         .memoryCachePolicy(CachePolicy.ENABLED)
         .diskCachePolicy(CachePolicy.ENABLED)
-        .networkCachePolicy(CachePolicy.DISABLED) // gallery is local, no network needed for images
-        .crossfade(true)
+                .crossfade(true)
         .components {
             add(VideoFrameDecoder.Factory()) // video thumbnails
         }
